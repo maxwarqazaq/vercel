@@ -12,7 +12,7 @@ if not TOKEN:
     raise ValueError("Bot token is not set in environment variables! Set 'TOKEN' in Vercel settings.")
 CHANNEL_USERNAME = '@cdntelegraph'  # Channel username
 BASE_API_URL = f"https://api.telegram.org/bot{TOKEN}"
-ADMIN_IDS = [123456789]  # Replace with your admin user IDs
+ADMIN_IDS = [6099917788]  # Replace with your admin user IDs
 
 # Dictionary to track files uploaded by the bot
 uploaded_files = {}
