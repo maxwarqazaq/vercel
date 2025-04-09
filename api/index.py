@@ -836,7 +836,6 @@ def index():
 </body>
 </html>
 """
-# Add this new route to your Flask app
 @app.route('/privacy', methods=['GET'])
 def privacy_policy():
     return """
@@ -845,15 +844,18 @@ def privacy_policy():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Privacy Policy - File Uploader Bot</title>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <title>Privacy Policy | File Uploader Bot</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
-            --primary: #4361ee;
-            --secondary: #3f37c9;
-            --dark: #1b263b;
-            --light: #f8f9fa;
-            --gray: #6c757d;
+            --primary: #6C5CE7;
+            --secondary: #A29BFE;
+            --accent: #FD79A8;
+            --dark: #2D3436;
+            --light: #F5F6FA;
+            --gradient: linear-gradient(135deg, #6C5CE7 0%, #FD79A8 100%);
+            --glass: rgba(255, 255, 255, 0.2);
         }
         
         * {
@@ -863,55 +865,155 @@ def privacy_policy():
         }
         
         body {
-            font-family: 'Roboto', sans-serif;
-            line-height: 1.6;
+            font-family: 'Poppins', sans-serif;
+            line-height: 1.8;
             color: var(--dark);
-            background-color: #f5f7fa;
-            padding: 0;
-            margin: 0;
+            background: var(--light);
+            background-image: radial-gradient(circle at 10% 20%, rgba(166, 177, 255, 0.2) 0%, rgba(255, 255, 255, 0) 90%);
+            min-height: 100vh;
         }
         
         .container {
-            max-width: 900px;
+            max-width: 1100px;
             margin: 0 auto;
-            padding: 2rem 1rem;
+            padding: 2rem;
         }
         
         header {
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            background: var(--gradient);
             color: white;
-            padding: 2rem 0;
+            padding: 5rem 0 4rem;
             text-align: center;
-            margin-bottom: 2rem;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 3rem;
+            clip-path: ellipse(100% 100% at 50% 0%);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        header::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><path fill="rgba(255,255,255,0.05)" d="M0,0 L100,0 L100,100 Q50,80 0,100 L0,0 Z"></path></svg>');
+            background-size: 100% 100%;
+            opacity: 0.3;
         }
         
         h1 {
-            font-size: 2.5rem;
+            font-family: 'Playfair Display', serif;
+            font-size: 3.5rem;
             margin-bottom: 1rem;
             font-weight: 700;
+            position: relative;
+            display: inline-block;
         }
         
-        .last-updated {
-            font-size: 0.9rem;
+        h1::after {
+            content: "";
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 4px;
+            background: var(--accent);
+            border-radius: 2px;
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
             opacity: 0.9;
-            margin-bottom: 1rem;
+            max-width: 700px;
+            margin: 0 auto;
         }
         
-        .policy-section {
+        .policy-container {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 2rem;
+            margin-bottom: 4rem;
+        }
+        
+        .sidebar {
+            position: sticky;
+            top: 2rem;
+            align-self: start;
             background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            border-radius: 16px;
             padding: 2rem;
-            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+        }
+        
+        .nav-title {
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 1.5rem;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+        }
+        
+        .nav-title i {
+            margin-right: 10px;
+        }
+        
+        .nav-links {
+            list-style: none;
+        }
+        
+        .nav-links li {
+            margin-bottom: 0.8rem;
+        }
+        
+        .nav-links a {
+            text-decoration: none;
+            color: var(--dark);
+            transition: all 0.3s ease;
+            display: block;
+            padding: 0.5rem 0;
+            border-left: 3px solid transparent;
+            padding-left: 15px;
+        }
+        
+        .nav-links a:hover, .nav-links a:focus {
+            color: var(--primary);
+            border-left: 3px solid var(--accent);
+            transform: translateX(5px);
+        }
+        
+        .policy-content {
+            background: white;
+            border-radius: 16px;
+            padding: 3rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+        }
+        
+        .section {
+            margin-bottom: 3rem;
+            scroll-margin-top: 100px;
         }
         
         .section-title {
-            font-size: 1.5rem;
+            font-family: 'Playfair Display', serif;
+            font-size: 2rem;
             color: var(--primary);
-            margin-bottom: 1rem;
-            padding-bottom: 0.5rem;
-            border-bottom: 2px solid #f0f0f0;
+            margin-bottom: 1.5rem;
+            position: relative;
+            display: inline-block;
+        }
+        
+        .section-title::after {
+            content: "";
+            position: absolute;
+            bottom: -8px;
+            left: 0;
+            width: 50px;
+            height: 3px;
+            background: var(--accent);
+            border-radius: 2px;
         }
         
         .section-content {
@@ -919,187 +1021,413 @@ def privacy_policy():
         }
         
         .section-content p {
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
         }
         
         .section-content ul {
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
             padding-left: 1.5rem;
         }
         
         .section-content li {
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.8rem;
+            position: relative;
+        }
+        
+        .section-content li::before {
+            content: "•";
+            color: var(--accent);
+            font-weight: bold;
+            display: inline-block;
+            width: 1em;
+            margin-left: -1em;
+        }
+        
+        .highlight-box {
+            background: rgba(108, 92, 231, 0.08);
+            border-left: 4px solid var(--primary);
+            padding: 1.5rem;
+            border-radius: 0 8px 8px 0;
+            margin: 2rem 0;
+        }
+        
+        .highlight-box p {
+            margin-bottom: 0;
         }
         
         .btn {
-            display: inline-block;
-            padding: 0.75rem 1.5rem;
-            background-color: var(--primary);
+            display: inline-flex;
+            align-items: center;
+            padding: 0.8rem 1.8rem;
+            background: var(--gradient);
             color: white;
             text-decoration: none;
-            border-radius: 4px;
+            border-radius: 50px;
             font-weight: 500;
             transition: all 0.3s ease;
             margin-top: 1rem;
+            box-shadow: 0 4px 15px rgba(108, 92, 231, 0.3);
         }
         
         .btn:hover {
-            background-color: var(--secondary);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(108, 92, 231, 0.4);
+        }
+        
+        .btn i {
+            margin-right: 8px;
+        }
+        
+        .last-updated {
+            display: inline-block;
+            background: var(--light);
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+            color: var(--dark);
         }
         
         footer {
             text-align: center;
-            padding: 2rem 0;
-            margin-top: 2rem;
-            color: var(--gray);
+            padding: 3rem 0;
+            color: var(--dark);
             font-size: 0.9rem;
+            position: relative;
         }
         
-        @media (max-width: 768px) {
-            .container {
-                padding: 1rem;
+        footer::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 3px;
+            background: var(--gradient);
+            border-radius: 3px;
+        }
+        
+        .floating-shapes {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+            overflow: hidden;
+        }
+        
+        .shape {
+            position: absolute;
+            opacity: 0.1;
+            border-radius: 50%;
+        }
+        
+        .shape-1 {
+            width: 300px;
+            height: 300px;
+            background: var(--primary);
+            top: -100px;
+            right: -100px;
+            filter: blur(80px);
+        }
+        
+        .shape-2 {
+            width: 200px;
+            height: 200px;
+            background: var(--accent);
+            bottom: -50px;
+            left: -50px;
+            filter: blur(60px);
+        }
+        
+        @media (max-width: 992px) {
+            .policy-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                position: static;
+                margin-bottom: 2rem;
             }
             
             h1 {
-                font-size: 2rem;
+                font-size: 2.8rem;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            header {
+                padding: 4rem 0 3rem;
             }
             
-            .policy-section {
-                padding: 1.5rem;
+            h1 {
+                font-size: 2.2rem;
             }
+            
+            .policy-content {
+                padding: 2rem;
+            }
+            
+            .section-title {
+                font-size: 1.8rem;
+            }
+        }
+        
+        /* Animation */
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+        
+        .floating {
+            animation: float 6s ease-in-out infinite;
         }
     </style>
 </head>
 <body>
-    <header>
+    <div class="floating-shapes">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+    </div>
+    
+    <header class="floating">
         <div class="container">
             <h1>Privacy Policy</h1>
-            <p class="last-updated">Last Updated: 2025</p>
+            <p class="subtitle">Your trust means everything to us. Here's how we protect your data.</p>
+            <span class="last-updated"><i class="fas fa-calendar-alt"></i> Last Updated: June 15, 2023</span>
         </div>
     </header>
     
     <div class="container">
-        <div class="policy-section">
-            <h2 class="section-title">1. Introduction</h2>
-            <div class="section-content">
-                <p>This Privacy Policy explains how File Uploader Bot ("we", "our", or "us") collects, uses, and discloses your information when you use our Telegram bot service.</p>
-                <p>By using our bot, you agree to the collection and use of information in accordance with this policy.</p>
-            </div>
-        </div>
-        
-        <div class="policy-section">
-            <h2 class="section-title">2. Information We Collect</h2>
-            <div class="section-content">
-                <p>When you use our bot, we may collect the following information:</p>
-                <ul>
-                    <li><strong>Basic User Information:</strong> Your Telegram user ID, username, first name, and last name</li>
-                    <li><strong>File Metadata:</strong> Information about files you upload including file type, size, and upload timestamp</li>
-                    <li><strong>Interaction Data:</strong> Commands you send to the bot and your interactions with our interface</li>
-                    <li><strong>Technical Information:</strong> Device information, IP address (for web interface), and usage statistics</li>
+        <div class="policy-container">
+            <aside class="sidebar">
+                <h3 class="nav-title"><i class="fas fa-bookmark"></i> Quick Links</h3>
+                <ul class="nav-links">
+                    <li><a href="#introduction">1. Introduction</a></li>
+                    <li><a href="#information-collected">2. Information Collected</a></li>
+                    <li><a href="#how-we-use">3. How We Use Data</a></li>
+                    <li><a href="#data-retention">4. Data Retention</a></li>
+                    <li><a href="#data-security">5. Data Security</a></li>
+                    <li><a href="#third-party">6. Third Parties</a></li>
+                    <li><a href="#your-rights">7. Your Rights</a></li>
+                    <li><a href="#changes">8. Policy Changes</a></li>
+                    <li><a href="#contact">9. Contact Us</a></li>
                 </ul>
-                <p><strong>Note:</strong> We do not store the actual content of files you upload beyond what is necessary to provide the service.</p>
-            </div>
-        </div>
-        
-        <div class="policy-section">
-            <h2 class="section-title">3. How We Use Your Information</h2>
-            <div class="section-content">
-                <p>We use the collected information for the following purposes:</p>
-                <ul>
-                    <li>To provide and maintain our service</li>
-                    <li>To notify you about changes to our service</li>
-                    <li>To allow you to participate in interactive features of our service</li>
-                    <li>To provide customer support</li>
-                    <li>To gather analysis or valuable information so that we can improve our service</li>
-                    <li>To monitor the usage of our service</li>
-                    <li>To detect, prevent and address technical issues</li>
+                
+                <h3 class="nav-title" style="margin-top: 2.5rem;"><i class="fas fa-shield-alt"></i> Data Protection</h3>
+                <ul class="nav-links">
+                    <li><a href="#"><i class="fas fa-lock"></i> GDPR Compliant</a></li>
+                    <li><a href="#"><i class="fas fa-user-shield"></i> No Data Selling</a></li>
+                    <li><a href="#"><i class="fas fa-encryption"></i> End-to-End Secure</a></li>
                 </ul>
-            </div>
-        </div>
-        
-        <div class="policy-section">
-            <h2 class="section-title">4. Data Retention</h2>
-            <div class="section-content">
-                <p>We retain collected information only for as long as necessary to provide you with our services:</p>
-                <ul>
-                    <li>File metadata is retained for 30 days after file deletion</li>
-                    <li>User information is retained while your account is active and for 90 days after</li>
-                    <li>Usage statistics may be retained indefinitely in anonymized form</li>
-                </ul>
-            </div>
-        </div>
-        
-        <div class="policy-section">
-            <h2 class="section-title">5. Data Security</h2>
-            <div class="section-content">
-                <p>We implement appropriate technical and organizational measures to protect your personal data:</p>
-                <ul>
-                    <li>All data transmissions are encrypted using SSL/TLS</li>
-                    <li>Access to user data is restricted to authorized personnel only</li>
-                    <li>Regular security audits of our infrastructure</li>
-                    <li>Secure storage solutions with access controls</li>
-                </ul>
-                <p>However, no method of transmission over the Internet or method of electronic storage is 100% secure.</p>
-            </div>
-        </div>
-        
-        <div class="policy-section">
-            <h2 class="section-title">6. Third-Party Services</h2>
-            <div class="section-content">
-                <p>We may employ third-party companies and individuals to facilitate our service ("Service Providers"), to provide the service on our behalf, or to assist us in analyzing how our service is used.</p>
-                <p>These third parties have access to your information only to perform these tasks on our behalf and are obligated not to disclose or use it for any other purpose.</p>
-                <p>Current Service Providers include:</p>
-                <ul>
-                    <li>Telegram Messenger for bot platform services</li>
-                    <li>Vercel for hosting our web interface</li>
-                    <li>Google Analytics for anonymous usage statistics</li>
-                </ul>
-            </div>
-        </div>
-        
-        <div class="policy-section">
-            <h2 class="section-title">7. Your Data Rights</h2>
-            <div class="section-content">
-                <p>You have the right to:</p>
-                <ul>
-                    <li>Access the personal data we hold about you</li>
-                    <li>Request correction of inaccurate personal data</li>
-                    <li>Request deletion of your personal data</li>
-                    <li>Object to processing of your personal data</li>
-                    <li>Request restriction of processing your personal data</li>
-                    <li>Request transfer of your personal data</li>
-                    <li>Withdraw your consent</li>
-                </ul>
-                <p>To exercise any of these rights, please contact us at @YourSupportChannel on Telegram.</p>
-            </div>
-        </div>
-        
-        <div class="policy-section">
-            <h2 class="section-title">8. Changes to This Policy</h2>
-            <div class="section-content">
-                <p>We may update our Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page.</p>
-                <p>You are advised to review this Privacy Policy periodically for any changes. Changes to this Privacy Policy are effective when they are posted on this page.</p>
-            </div>
-        </div>
-        
-        <div class="policy-section">
-            <h2 class="section-title">9. Contact Us</h2>
-            <div class="section-content">
-                <p>If you have any questions about this Privacy Policy, please contact us:</p>
-                <ul>
-                    <li>Via Telegram: @MAXWARORG</li>
-                    <li>Via email: hojievmakhmud@gmail.com</li>
-                </ul>
-                <a href="https://t.me/IP_AdressBot" class="btn">Back to Bot</a>
-            </div>
+            </aside>
+            
+            <main class="policy-content">
+                <section id="introduction" class="section">
+                    <h2 class="section-title">1. Introduction</h2>
+                    <div class="section-content">
+                        <p>Welcome to File Uploader Bot ("we", "our", or "us"). We're committed to protecting your privacy and being transparent about how we handle your information.</p>
+                        <p>This Privacy Policy explains our practices regarding the collection, use, and disclosure of your information when you use our Telegram bot service.</p>
+                        
+                        <div class="highlight-box">
+                            <p><i class="fas fa-info-circle"></i> <strong>By using our bot</strong>, you agree to the collection and use of information in accordance with this policy. If you disagree with any part, please discontinue use immediately.</p>
+                        </div>
+                    </div>
+                </section>
+                
+                <section id="information-collected" class="section">
+                    <h2 class="section-title">2. Information We Collect</h2>
+                    <div class="section-content">
+                        <p>To provide our services, we collect certain information when you interact with our bot:</p>
+                        
+                        <h3 style="color: var(--primary); margin: 1.5rem 0 1rem;">Basic User Information</h3>
+                        <ul>
+                            <li>Telegram user ID and username</li>
+                            <li>First name and last name (if provided)</li>
+                            <li>Language preference and timezone</li>
+                        </ul>
+                        
+                        <h3 style="color: var(--primary); margin: 1.5rem 0 1rem;">File Metadata</h3>
+                        <ul>
+                            <li>File type and size</li>
+                            <li>Upload timestamps</li>
+                            <li>Optional captions/tags</li>
+                        </ul>
+                        
+                        <h3 style="color: var(--primary); margin: 1.5rem 0 1rem;">Technical Information</h3>
+                        <ul>
+                            <li>Device type and operating system</li>
+                            <li>IP address (for web interface)</li>
+                            <li>Usage patterns and preferences</li>
+                        </ul>
+                        
+                        <div class="highlight-box">
+                            <p><i class="fas fa-exclamation-triangle"></i> <strong>Important:</strong> We <strong>never</strong> access or store the actual content of your files beyond what's necessary for temporary processing and delivery to Telegram's servers.</p>
+                        </div>
+                    </div>
+                </section>
+                
+                <section id="how-we-use" class="section">
+                    <h2 class="section-title">3. How We Use Your Information</h2>
+                    <div class="section-content">
+                        <p>Your data helps us provide and improve our services:</p>
+                        <ul>
+                            <li><strong>Service Delivery:</strong> Process your file uploads and commands</li>
+                            <li><strong>Improvements:</strong> Analyze usage to enhance features</li>
+                            <li><strong>Security:</strong> Detect and prevent abuse</li>
+                            <li><strong>Communication:</strong> Respond to your inquiries</li>
+                            <li><strong>Legal Compliance:</strong> Meet regulatory requirements</li>
+                        </ul>
+                        
+                        <div style="background: rgba(253, 121, 168, 0.08); border-left: 4px solid var(--accent); padding: 1.5rem; border-radius: 0 8px 8px 0; margin: 2rem 0;">
+                            <p><i class="fas fa-heart" style="color: var(--accent);"></i> <strong>We value your privacy:</strong> We never sell your data or use it for unrelated advertising.</p>
+                        </div>
+                    </div>
+                </section>
+                
+                <section id="data-retention" class="section">
+                    <h2 class="section-title">4. Data Retention</h2>
+                    <div class="section-content">
+                        <p>We retain your information only as long as necessary:</p>
+                        <ul>
+                            <li><strong>Active Users:</strong> Data persists while your account is active</li>
+                            <li><strong>Inactive Users:</strong> Automatically deleted after 90 days of inactivity</li>
+                            <li><strong>Deleted Files:</strong> Metadata purged after 30 days</li>
+                            <li><strong>Legal Requirements:</strong> Some data may be retained longer if required</li>
+                        </ul>
+                    </div>
+                </section>
+                
+                <section id="data-security" class="section">
+                    <h2 class="section-title">5. Data Security</h2>
+                    <div class="section-content">
+                        <p>We implement enterprise-grade security measures:</p>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin: 1.5rem 0;">
+                            <div style="background: rgba(108, 92, 231, 0.05); padding: 1.5rem; border-radius: 8px; border: 1px solid rgba(108, 92, 231, 0.1);">
+                                <h3 style="color: var(--primary); margin-bottom: 0.8rem; display: flex; align-items: center;">
+                                    <i class="fas fa-lock" style="margin-right: 8px;"></i> Encryption
+                                </h3>
+                                <p>All data transmissions protected with TLS 1.3 encryption</p>
+                            </div>
+                            <div style="background: rgba(108, 92, 231, 0.05); padding: 1.5rem; border-radius: 8px; border: 1px solid rgba(108, 92, 231, 0.1);">
+                                <h3 style="color: var(--primary); margin-bottom: 0.8rem; display: flex; align-items: center;">
+                                    <i class="fas fa-shield-alt" style="margin-right: 8px;"></i> Access Control
+                                </h3>
+                                <p>Strict role-based access to sensitive data</p>
+                            </div>
+                            <div style="background: rgba(108, 92, 231, 0.05); padding: 1.5rem; border-radius: 8px; border: 1px solid rgba(108, 92, 231, 0.1);">
+                                <h3 style="color: var(--primary); margin-bottom: 0.8rem; display: flex; align-items: center;">
+                                    <i class="fas fa-clock" style="margin-right: 8px;"></i> Monitoring
+                                </h3>
+                                <p>24/7 security monitoring and alerts</p>
+                            </div>
+                        </div>
+                        <p>While we implement rigorous security standards, no electronic transmission or storage is 100% secure.</p>
+                    </div>
+                </section>
+                
+                <section id="third-party" class="section">
+                    <h2 class="section-title">6. Third-Party Services</h2>
+                    <div class="section-content">
+                        <p>We work with trusted partners to deliver our services:</p>
+                        <ul>
+                            <li><strong>Telegram:</strong> Our bot platform provider</li>
+                            <li><strong>Vercel:</strong> Cloud hosting infrastructure</li>
+                            <li><strong>Sentry:</strong> Error monitoring (anonymous data only)</li>
+                        </ul>
+                        <p>All third parties undergo strict vetting and are contractually obligated to protect your data.</p>
+                    </div>
+                </section>
+                
+                <section id="your-rights" class="section">
+                    <h2 class="section-title">7. Your Data Rights</h2>
+                    <div class="section-content">
+                        <p>You have full control over your information:</p>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin: 1.5rem 0;">
+                            <div style="background: white; border: 1px solid rgba(108, 92, 231, 0.2); border-radius: 8px; padding: 1.2rem; text-align: center;">
+                                <div style="width: 50px; height: 50px; background: rgba(108, 92, 231, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.8rem; color: var(--primary);">
+                                    <i class="fas fa-download"></i>
+                                </div>
+                                <h3 style="font-size: 1rem; color: var(--primary);">Access</h3>
+                                <p style="font-size: 0.9rem;">Request a copy of your data</p>
+                            </div>
+                            <div style="background: white; border: 1px solid rgba(108, 92, 231, 0.2); border-radius: 8px; padding: 1.2rem; text-align: center;">
+                                <div style="width: 50px; height: 50px; background: rgba(108, 92, 231, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.8rem; color: var(--primary);">
+                                    <i class="fas fa-edit"></i>
+                                </div>
+                                <h3 style="font-size: 1rem; color: var(--primary);">Correct</h3>
+                                <p style="font-size: 0.9rem;">Update inaccurate information</p>
+                            </div>
+                            <div style="background: white; border: 1px solid rgba(108, 92, 231, 0.2); border-radius: 8px; padding: 1.2rem; text-align: center;">
+                                <div style="width: 50px; height: 50px; background: rgba(108, 92, 231, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.8rem; color: var(--primary);">
+                                    <i class="fas fa-trash-alt"></i>
+                                </div>
+                                <h3 style="font-size: 1rem; color: var(--primary);">Delete</h3>
+                                <p style="font-size: 0.9rem;">Remove your personal data</p>
+                            </div>
+                            <div style="background: white; border: 1px solid rgba(108, 92, 231, 0.2); border-radius: 8px; padding: 1.2rem; text-align: center;">
+                                <div style="width: 50px; height: 50px; background: rgba(108, 92, 231, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.8rem; color: var(--primary);">
+                                    <i class="fas fa-ban"></i>
+                                </div>
+                                <h3 style="font-size: 1rem; color: var(--primary);">Object</h3>
+                                <p style="font-size: 0.9rem;">Opt-out of processing</p>
+                            </div>
+                        </div>
+                        <p>To exercise these rights, please contact us using the information below.</p>
+                    </div>
+                </section>
+                
+                <section id="changes" class="section">
+                    <h2 class="section-title">8. Policy Changes</h2>
+                    <div class="section-content">
+                        <p>We may update this policy to reflect changes in our practices:</p>
+                        <ul>
+                            <li>Significant changes will be notified via Telegram</li>
+                            <li>Continued use after changes constitutes acceptance</li>
+                            <li>Previous versions archived for reference</li>
+                        </ul>
+                    </div>
+                </section>
+                
+                <section id="contact" class="section">
+                    <h2 class="section-title">9. Contact Us</h2>
+                    <div class="section-content">
+                        <p>For privacy-related inquiries or to exercise your rights:</p>
+                        
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin: 1.5rem 0;">
+                            <div style="background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.03); border: 1px solid rgba(108, 92, 231, 0.2);">
+                                <h3 style="color: var(--primary); margin-bottom: 1rem; display: flex; align-items: center;">
+                                    <i class="fab fa-telegram" style="margin-right: 10px;"></i> Telegram
+                                </h3>
+                                <p>Message us at: <strong>@MAXWARORG</strong></p>
+                                <p style="margin-top: 0.5rem; font-size: 0.9rem;">Typically responds within 24 hours</p>
+                            </div>
+                            
+                            <div style="background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.03); border: 1px solid rgba(108, 92, 231, 0.2);">
+                                <h3 style="color: var(--primary); margin-bottom: 1rem; display: flex; align-items: center;">
+                                    <i class="fas fa-envelope" style="margin-right: 10px;"></i> Email
+                                </h3>
+                                <p>Write to: <strong>hojievmakhmud@gmail.com</strong></p>
+                                <p style="margin-top: 0.5rem; font-size: 0.9rem;">For formal requests</p>
+                            </div>
+                        </div>
+                        
+                        <a href="https://t.me/IP_AdressBot" class="btn">
+                            <i class="fas fa-arrow-left"></i> Back to Bot
+                        </a>
+                    </div>
+                </section>
+            </main>
         </div>
     </div>
     
     <footer>
         <div class="container">
             <p>&copy; 2025 File Uploader Bot. All rights reserved.</p>
+            <p style="margin-top: 0.5rem; font-size: 0.8rem; opacity: 0.8;">Built with <i class="fas fa-heart" style="color: var(--accent);"></i> and GDPR compliance</p>
         </div>
     </footer>
 </body>
