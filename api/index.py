@@ -5,6 +5,7 @@ from flask import Flask, request, jsonify
 from datetime import datetime
 from ratelimit import limits, sleep_and_retry
 from typing import Optional, Dict, Any
+from vercel_kv import KV  # Vercel KV client
 
 # Flask application setup
 app = Flask(__name__)
@@ -21,13 +22,17 @@ logger = logging.getLogger(__name__)
 TOKEN = os.getenv('TOKEN')
 CHANNEL_USERNAME = '@cdntelegraph'
 BASE_API_URL = f"https://api.telegram.org/bot{TOKEN}"
-REQUESTS_PER_MINUTE = 20
+REQUESTS_PER_MINUTE = 30  # Increased to 30
 
 if not TOKEN:
     raise ValueError("Bot token not set! Configure 'TOKEN' in environment variables.")
 
-# Storage for uploaded files
-uploaded_files: Dict[int, Dict[str, Any]] = {}
+# Initialize Vercel KV for persistent storage
+try:
+    kv = KV()
+except Exception as e:
+    logger.error(f"Failed to initialize Vercel KV: {str(e)}")
+    raise
 
 # Rate-limited API calls
 @sleep_and_retry
@@ -37,7 +42,11 @@ def telegram_api_call(method: str, payload: Dict) -> Optional[Dict]:
     try:
         response = requests.post(url, json=payload, timeout=5)
         response.raise_for_status()
-        return response.json()
+        result = response.json()
+        if not result.get("ok"):
+            logger.error(f"Telegram API error: {result}")
+            return None
+        return result
     except requests.RequestException as e:
         logger.error(f"API call failed: {str(e)}")
         return None
@@ -142,20 +151,54 @@ def delete_message(chat_id: str, message_id: int) -> bool:
     result = telegram_api_call("deleteMessage", payload)
     return bool(result and result.get("ok"))
 
+# Vercel KV helper functions
+async def store_uploaded_file(channel_message_id: int, file_data: Dict):
+    try:
+        await kv.set(f"file_{channel_message_id}", file_data)
+    except Exception as e:
+        logger.error(f"Failed to store file data in KV: {str(e)}")
+        raise
+
+async def get_uploaded_file(channel_message_id: int) -> Optional[Dict]:
+    try:
+        return await kv.get(f"file_{channel_message_id}")
+    except Exception as e:
+        logger.error(f"Failed to retrieve file data from KV: {str(e)}")
+        return None
+
+async def delete_uploaded_file(channel_message_id: int):
+    try:
+        await kv.delete(f"file_{channel_message_id}")
+    except Exception as e:
+        logger.error(f"Failed to delete file data from KV: {str(e)}")
+        raise
+
 # Global error handler
 @app.errorhandler(Exception)
 def handle_exception(e):
     logger.error(f"Unhandled exception: {str(e)}", exc_info=True)
     return jsonify({"status": "error", "message": "Internal server error"}), 500
 
+# Health check endpoint
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({"status": "healthy", "timestamp": datetime.now().isoformat()}), 200
+
 # Webhook setup
 @app.route('/setwebhook', methods=['GET', 'POST'])
 def set_webhook():
     vercel_url = os.getenv('VERCEL_URL', 'https://your-project.vercel.app')
+    if not vercel_url:
+        logger.error("VERCEL_URL not set in environment variables")
+        return "VERCEL_URL not set", 500
     webhook_url = f"{BASE_API_URL}/setWebhook?url={vercel_url}/webhook&allowed_updates=%5B%22message%22,%22callback_query%22%5D"
     try:
         response = requests.get(webhook_url, timeout=5)
         response.raise_for_status()
+        result = response.json()
+        if not result.get("ok"):
+            logger.error(f"Failed to set webhook: {result}")
+            return f"Failed to set webhook: {result}", 500
         logger.info("Webhook set successfully")
         return "Webhook successfully set", 200
     except requests.RequestException as e:
@@ -164,7 +207,7 @@ def set_webhook():
 
 # Webhook handler
 @app.route('/webhook', methods=['POST'])
-def webhook():
+async def webhook():
     update = request.get_json()
     if not update:
         return jsonify({"status": "no data"}), 400
@@ -187,10 +230,10 @@ def webhook():
         if callback_data.startswith("delete_"):
             try:
                 channel_message_id = int(callback_data.split("_")[1])
-                if (channel_message_id in uploaded_files and 
-                    uploaded_files[channel_message_id]["user_id"] == user_id):
+                file_data = await get_uploaded_file(channel_message_id)
+                if file_data and file_data["user_id"] == user_id:
                     if delete_message(CHANNEL_USERNAME, channel_message_id):
-                        del uploaded_files[channel_message_id]
+                        await delete_uploaded_file(channel_message_id)
                         send_message(chat_id, "✅ File deleted successfully!")
                     else:
                         send_message(chat_id, "❌ Deletion failed")
@@ -203,7 +246,12 @@ def webhook():
         elif callback_data in handlers:
             text, markup = handlers[callback_data]
             if callback_data == "cmd_restart":
-                uploaded_files.clear()
+                try:
+                    await kv.flush()  # Clear all KV data
+                except Exception as e:
+                    logger.error(f"Failed to clear KV: {str(e)}")
+                    send_message(chat_id, "❌ Failed to clear cache")
+                    return jsonify({"status": "error"}), 500
             send_message(chat_id, text, markup)
 
         return jsonify({"status": "processed"}), 200
@@ -261,12 +309,13 @@ def webhook():
             channel_message_id = result["result"]["message_id"]
             channel_url = f"https://t.me/{CHANNEL_USERNAME[1:]}/{channel_message_id}"
             
-            uploaded_files[channel_message_id] = {
+            file_data = {
                 "file_id": file_id,
                 "file_type": file_type,
                 "user_id": user_id,
                 "timestamp": datetime.now().isoformat()
             }
+            await store_uploaded_file(channel_message_id, file_data)
 
             reply_markup = {
                 "inline_keyboard": [
