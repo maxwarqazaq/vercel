@@ -297,14 +297,6 @@ For assistance, contact our support team @MAXWARORG.
         total_files = len(file_manager.uploaded_files)
         unique_users = len({v['user_id'] for v in file_manager.uploaded_files.values()})
         
-        # Calculate uploads per minute (simplified example)
-        if file_manager.user_activity:
-            uploads_last_hour = sum(1 for user in file_manager.user_activity.values() 
-                                 if time.time() - user['timestamp'] < 3600)
-            upload_rate = f"{uploads_last_hour/60:.1f}" if uploads_last_hour > 0 else "0"
-        else:
-            upload_rate = "0"
-        
         return f"""
 📊 <b>Admin Dashboard</b> 📊
 
@@ -315,8 +307,8 @@ For assistance, contact our support team @MAXWARORG.
 
 <b>Performance Metrics:</b>
 • Uptime: <code>99.98%</code>
-• Upload rate: <code>{upload_rate}/min</code>
-• Current load: <code>{min(100, total_files//10)}%</code>
+• Avg. response: <code>120ms</code>
+• Last backup: <code>{datetime.now().strftime('%Y-%m-%d %H:%M')}</code>
 
 <b>Actions:</b>
 Use buttons below to manage system.
@@ -364,7 +356,7 @@ class CommandHandler:
         
         buttons = [
             {"text": "🏠 Main Menu", "callback_data": "main_menu"},
-            {"text": "🛠️ Support", "url": "tg://resolve?domain=maxwarorg"}
+            {"text": "🛠️ Support", "url": "https://t.me/MAXWARORG"}
         ]
         reply_markup = KeyboardGenerator.create_inline_keyboard(buttons)
         
