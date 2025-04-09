@@ -330,7 +330,7 @@ class CommandHandler:
         reply_markup = KeyboardGenerator.create_inline_keyboard(
             buttons,
             columns=2,
-            footer_buttons=[{"text": "🔒 Privacy Policy", "url": "https://example.com/privacy"}]
+            footer_buttons=[{"text": "🔒 Privacy Policy", "url": "https://uploadfiletgbot.vercel.app/privacy"}]
         )
         
         TelegramAPI.send_message(chat_id, welcome_msg, reply_markup)
