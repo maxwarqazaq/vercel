@@ -452,7 +452,7 @@ def index():
             <p><strong>Status:</strong> Running</p>
             <p>This is the webhook endpoint for the Telegram File Uploader Bot.</p>
         </div>
-        <a href="https://t.me/your_bot_username" class="btn">Start the Bot</a>
+        <a href="https://t.me/IP_AdressBot" class="btn">Start the Bot</a>
         <a href="/setwebhook" class="btn">Set Webhook</a>
     </body>
     </html>
