@@ -1,6 +1,8 @@
 import os
 import requests
+import time
 from flask import Flask, Response, request, jsonify
+from vercel_storage import kv  # Vercel KV for persistent storage
 
 # Flask application
 app = Flask(__name__)
@@ -14,13 +16,34 @@ BASE_API_URL = f"https://api.telegram.org/bot{TOKEN}"
 MAX_FILE_SIZE_MB = 20  # Telegram API limit for getFile (20MB)
 UPLOAD_LIMIT_MB = 80  # Your specified upload limit
 
-# Data storage
-uploaded_files = {}  # Tracks uploaded files
-users = set()  # Tracks unique users
-welcome_message = "Welcome! Send me a file, and I'll upload it to the channel and share the URL."  # Default welcome message
+# Initialize Vercel KV (configure in Vercel dashboard)
+try:
+    kv_client = kv.KV()
+except Exception as e:
+    print(f"Error initializing Vercel KV: {str(e)}")
+    raise e
 
 # Admin user ID (replace with your Telegram user ID)
 ADMIN_ID = YOUR_ADMIN_ID  # e.g., 123456789, find it by sending a message and checking logs
+
+# Welcome message (stored in KV)
+welcome_message_key = "welcome_message"
+default_welcome_message = "Welcome! Send me a file, and I'll upload it to the channel and share the URL."
+
+# Helper function to get/set welcome message in KV
+def get_welcome_message():
+    try:
+        welcome_message = kv_client.get(welcome_message_key)
+        return welcome_message if welcome_message else default_welcome_message
+    except Exception as e:
+        print(f"Error getting welcome message from KV: {str(e)}")
+        return default_welcome_message
+
+def set_welcome_message(message):
+    try:
+        kv_client.set(welcome_message_key, message)
+    except Exception as e:
+        print(f"Error setting welcome message in KV: {str(e)}")
 
 # Helper function to send a message
 def send_message(chat_id, text, reply_markup=None):
@@ -36,6 +59,7 @@ def send_message(chat_id, text, reply_markup=None):
         response = requests.post(url, json=payload, timeout=5)
         if response.status_code != 200:
             print(f"Error sending message: {response.text}")
+        time.sleep(0.1)  # Rate limit delay
         return response.json()
     except Exception as e:
         print(f"Error in send_message: {str(e)}")
@@ -64,6 +88,7 @@ def send_file_to_channel(file_id, file_type, chat_id=CHANNEL_USERNAME):
         response = requests.post(url, json=payload, timeout=5)
         if response.status_code != 200:
             print(f"Error sending file: {response.text}")
+        time.sleep(0.1)  # Rate limit delay
         return response.json()
     except Exception as e:
         print(f"Error in send_file_to_channel: {str(e)}")
@@ -77,6 +102,7 @@ def delete_message(chat_id, message_id):
         response = requests.post(url, json=payload, timeout=5)
         if response.status_code != 200:
             print(f"Error deleting message: {response.text}")
+        time.sleep(0.1)  # Rate limit delay
         return response.status_code == 200
     except Exception as e:
         print(f"Error in delete_message: {str(e)}")
@@ -90,6 +116,7 @@ def pin_message(chat_id, message_id):
         response = requests.post(url, json=payload, timeout=5)
         if response.status_code != 200:
             print(f"Error pinning message: {response.text}")
+        time.sleep(0.1)  # Rate limit delay
         return response.status_code == 200
     except Exception as e:
         print(f"Error in pin_message: {str(e)}")
@@ -104,10 +131,40 @@ def get_file_info(file_id):
         if response.status_code == 200:
             return response.json()
         print(f"Error getting file info: {response.text}")
+        time.sleep(0.1)  # Rate limit delay
         return None
     except Exception as e:
         print(f"Error in get_file_info: {str(e)}")
         return None
+
+# Helper functions for KV storage
+def get_uploaded_files():
+    try:
+        files = kv_client.get("uploaded_files") or {}
+        return files
+    except Exception as e:
+        print(f"Error getting uploaded files from KV: {str(e)}")
+        return {}
+
+def set_uploaded_files(files):
+    try:
+        kv_client.set("uploaded_files", files)
+    except Exception as e:
+        print(f"Error setting uploaded files in KV: {str(e)}")
+
+def get_users():
+    try:
+        users = kv_client.get("users") or []
+        return set(users)
+    except Exception as e:
+        print(f"Error getting users from KV: {str(e)}")
+        return set()
+
+def set_users(users):
+    try:
+        kv_client.set("users", list(users))
+    except Exception as e:
+        print(f"Error setting users in KV: {str(e)}")
 
 # Set webhook for Vercel
 @app.route('/setwebhook', methods=['GET', 'POST'])
@@ -129,7 +186,12 @@ def webhook():
     try:
         update = request.get_json()
         if not update:
+            print("No update data received")
             return jsonify({"status": "no data"}), 400
+
+        # Load data from KV
+        uploaded_files = get_uploaded_files()
+        users = get_users()
 
         # Handle callback queries (delete button)
         if "callback_query" in update:
@@ -141,10 +203,12 @@ def webhook():
 
             if callback_data.startswith("delete_"):
                 channel_message_id = int(callback_data.split("_")[1])
-                if (channel_message_id in uploaded_files and 
-                    uploaded_files[channel_message_id]["user_id"] == user_id):
+                channel_message_id_str = str(channel_message_id)
+                if (channel_message_id_str in uploaded_files and 
+                    uploaded_files[channel_message_id_str]["user_id"] == user_id):
                     if delete_message(CHANNEL_USERNAME, channel_message_id):
-                        del uploaded_files[channel_message_id]
+                        del uploaded_files[channel_message_id_str]
+                        set_uploaded_files(uploaded_files)
                         send_message(chat_id, "File successfully deleted!")
                     else:
                         send_message(chat_id, "Failed to delete the file.")
@@ -154,17 +218,20 @@ def webhook():
 
         # Handle messages
         if "message" not in update:
+            print("No message in update")
             return jsonify({"status": "ignored"}), 200
 
         message = update["message"]
         chat_id = message["chat"]["id"]
         user_id = message["from"]["id"]
-        users.add(user_id)  # Track unique users
+        users.add(user_id)
+        set_users(users)  # Save users to KV
 
         # Command handlers
         if "text" in message:
             text = message["text"].lower()
             if text == "/start":
+                welcome_message = get_welcome_message()
                 send_message(chat_id, welcome_message)
             elif text == "/help":
                 help_text = """
@@ -188,6 +255,8 @@ Available commands:
             elif text == "/restart":
                 uploaded_files.clear()
                 users.clear()
+                set_uploaded_files(uploaded_files)
+                set_users(users)
                 send_message(chat_id, "Bot has been restarted. All cached data has been cleared.")
             elif text == "/upload":
                 upload_instructions = """
@@ -200,9 +269,10 @@ To upload a file:
             elif text.startswith("/fileinfo"):
                 try:
                     message_id = int(text.split()[1])
-                    if (message_id in uploaded_files and 
-                        uploaded_files[message_id]["user_id"] == user_id):
-                        file_info = uploaded_files[message_id]
+                    message_id_str = str(message_id)
+                    if (message_id_str in uploaded_files and 
+                        uploaded_files[message_id_str]["user_id"] == user_id):
+                        file_info = uploaded_files[message_id_str]
                         info_text = f"""
 File Info:
 - Type: {file_info['file_type']}
@@ -232,9 +302,10 @@ File Info:
                     return jsonify({"status": "processed"}), 200
                 deleted_count = 0
                 for message_id, _ in user_files:
-                    if delete_message(CHANNEL_USERNAME, message_id):
+                    if delete_message(CHANNEL_USERNAME, int(message_id)):
                         del uploaded_files[message_id]
                         deleted_count += 1
+                set_uploaded_files(uploaded_files)
                 send_message(chat_id, f"Cleared {deleted_count} of your files from the channel.")
             elif text.startswith("/broadcast") and user_id == ADMIN_ID:
                 try:
@@ -248,9 +319,10 @@ File Info:
             elif text.startswith("/download"):
                 try:
                     message_id = int(text.split()[1])
-                    if (message_id in uploaded_files and 
-                        uploaded_files[message_id]["user_id"] == user_id):
-                        file_info = uploaded_files[message_id]
+                    message_id_str = str(message_id)
+                    if (message_id_str in uploaded_files and 
+                        uploaded_files[message_id_str]["user_id"] == user_id):
+                        file_info = uploaded_files[message_id_str]
                         file_type = file_info["file_type"]
                         file_id = file_info["file_id"]
                         file_size = int(file_info["file_size"]) if file_info["file_size"] != "Unknown" else 0
@@ -284,7 +356,8 @@ Bot Stats:
             elif text.startswith("/pin") and user_id == ADMIN_ID:
                 try:
                     message_id = int(text.split()[1])
-                    if message_id in uploaded_files:
+                    message_id_str = str(message_id)
+                    if message_id_str in uploaded_files:
                         if pin_message(CHANNEL_USERNAME, message_id):
                             send_message(chat_id, f"File {message_id} pinned in the channel!")
                         else:
@@ -315,8 +388,8 @@ Bot Stats:
                     send_message(chat_id, "Usage: /search <type>")
             elif text.startswith("/setwelcome") and user_id == ADMIN_ID:
                 try:
-                    global welcome_message
-                    welcome_message = text.split(" ", 1)[1]
+                    new_welcome_message = text.split(" ", 1)[1]
+                    set_welcome_message(new_welcome_message)
                     send_message(chat_id, "Welcome message updated!")
                 except IndexError:
                     send_message(chat_id, "Usage: /setwelcome <message>")
@@ -325,9 +398,10 @@ Bot Stats:
             elif text.startswith("/savefile"):
                 try:
                     message_id = int(text.split()[1])
-                    if (message_id in uploaded_files and 
-                        uploaded_files[message_id]["user_id"] == user_id):
-                        file_info = uploaded_files[message_id]
+                    message_id_str = str(message_id)
+                    if (message_id_str in uploaded_files and 
+                        uploaded_files[message_id_str]["user_id"] == user_id):
+                        file_info = uploaded_files[message_id_str]
                         file_id = file_info["file_id"]
                         file_size = int(file_info["file_size"]) if file_info["file_size"] != "Unknown" else 0
                         
@@ -382,15 +456,17 @@ Bot Stats:
             result = send_file_to_channel(file_id, file_type)
             if result and result.get("ok"):
                 channel_message_id = result["result"]["message_id"]
+                channel_message_id_str = str(channel_message_id)
                 channel_url = f"https://t.me/{CHANNEL_USERNAME[1:]}/{channel_message_id}"
 
-                # Store file info with size
-                uploaded_files[channel_message_id] = {
+                # Store file info in KV
+                uploaded_files[channel_message_id_str] = {
                     "file_id": file_id,
                     "file_type": file_type,
                     "user_id": user_id,
                     "file_size": file_size
                 }
+                set_uploaded_files(uploaded_files)
 
                 # Send URL with delete button
                 reply_markup = {
