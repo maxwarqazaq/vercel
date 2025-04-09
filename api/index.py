@@ -1,151 +1,188 @@
 import os
 import requests
 from flask import Flask, Response, request, jsonify
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
-import asyncio
 
-# Get tokens from environment variables
-TOKEN = os.getenv('TOKEN')
-BOT_TOKEN = os.getenv('BOT_TOKEN') or '7135940302:AAFYWRjjhEnQ0_1ScjXtmLsS3gXxPvHr9Dk'
-CHANNEL_USERNAME = os.getenv('CHANNEL_USERNAME') or '@cdntelegraph'
-
-if not TOKEN or not BOT_TOKEN:
-    raise ValueError("Bot tokens are not set in environment variables!")
-
-# Create Flask app
+# Flask application
 app = Flask(__name__)
+
+# Bot configuration
+TOKEN = os.getenv('TOKEN')  # Fetch token from Vercel environment variables
+if not TOKEN:
+    raise ValueError("Bot token is not set in environment variables! Set 'TOKEN' in Vercel settings.")
+CHANNEL_USERNAME = '@cdntelegraph'  # Channel username
+BASE_API_URL = f"https://api.telegram.org/bot{TOKEN}"
 
 # Dictionary to track files uploaded by the bot
 uploaded_files = {}
 
-# Telegram bot application (will be initialized later)
-application = None
+# Helper function to send a message
+def send_message(chat_id, text, reply_markup=None):
+    url = f"{BASE_API_URL}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "HTML"
+    }
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
+    response = requests.post(url, json=payload)
+    if response.status_code != 200:
+        print(f"Error sending message: {response.text}")
+    return response.json()
 
-@app.route('/setwebhook', methods=['POST','GET'])
-def setwebhook():
-    webhook_url = f"https://api.telegram.org/bot{TOKEN}/setWebhook?url={os.environ.get('VERCEL_URL')}/webhook&allowed_updates=%5B%22message%22,%22callback_query%22%5D"
+# Helper function to send a file to the channel
+def send_file_to_channel(file_id, file_type, chat_id=CHANNEL_USERNAME):
+    if file_type == "document":
+        method = "sendDocument"
+        payload_key = "document"
+    elif file_type == "photo":
+        method = "sendPhoto"
+        payload_key = "photo"
+    elif file_type == "video":
+        method = "sendVideo"
+        payload_key = "video"
+    elif file_type == "audio":
+        method = "sendAudio"
+        payload_key = "audio"
+    else:
+        return None
+
+    url = f"{BASE_API_URL}/{method}"
+    payload = {"chat_id": chat_id, payload_key: file_id}
+    response = requests.post(url, json=payload)
+    if response.status_code != 200:
+        print(f"Error sending file: {response.text}")
+    return response.json()
+
+# Helper function to delete a message
+def delete_message(chat_id, message_id):
+    url = f"{BASE_API_URL}/deleteMessage"
+    payload = {"chat_id": chat_id, "message_id": message_id}
+    response = requests.post(url, json=payload)
+    if response.status_code != 200:
+        print(f"Error deleting message: {response.text}")
+    return response.status_code == 200
+
+# Set webhook for Vercel
+@app.route('/setwebhook', methods=['GET', 'POST'])
+def set_webhook():
+    vercel_url = os.getenv('VERCEL_URL', 'https://your-project.vercel.app')  # Default for Vercel
+    webhook_url = f"{BASE_API_URL}/setWebhook?url={vercel_url}/webhook&allowed_updates=%5B%22message%22,%22callback_query%22%5D"
     response = requests.get(webhook_url)
-    
     if response.status_code == 200:
         return "Webhook successfully set", 200
-    else:
-        return f"Error setting webhook: {response.text}", response.status_code
-    return "Vercel URL not found", 400
+    return f"Error setting webhook: {response.text}", response.status_code
 
-async def handle_file_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle file uploads to Telegram channel"""
-    try:
-        # Check file type
-        if update.message.document:
-            file = update.message.document
-        elif update.message.photo:
-            file = update.message.photo[-1]  # Largest size
-        elif update.message.video:
-            file = update.message.video
-        elif update.message.audio:
-            file = update.message.audio
-        else:
-            await update.message.reply_text("Please send a valid file (document, photo, video, or audio).")
-            return
-
-        file_id = file.file_id
-
-        # Send file to channel
-        if update.message.document:
-            sent_message = await context.bot.send_document(chat_id=CHANNEL_USERNAME, document=file_id)
-        elif update.message.photo:
-            sent_message = await context.bot.send_photo(chat_id=CHANNEL_USERNAME, photo=file_id)
-        elif update.message.video:
-            sent_message = await context.bot.send_video(chat_id=CHANNEL_USERNAME, video=file_id)
-        elif update.message.audio:
-            sent_message = await context.bot.send_audio(chat_id=CHANNEL_USERNAME, audio=file_id)
-
-        # Generate public URL
-        channel_message_id = sent_message.message_id
-        channel_url = f"https://t.me/{CHANNEL_USERNAME[1:]}/{channel_message_id}"
-
-        # Store file info
-        uploaded_files[channel_message_id] = {
-            "file_id": file_id,
-            "file_type": "document" if update.message.document else
-                         "photo" if update.message.photo else
-                         "video" if update.message.video else
-                         "audio",
-            "user_id": update.message.from_user.id
-        }
-
-        # Send URL with delete button
-        keyboard = [
-            [InlineKeyboardButton("Delete File", callback_data=f"delete_{channel_message_id}")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text(f"File uploaded to the channel! Here's the URL:\n{channel_url}", reply_markup=reply_markup)
-
-    except Exception as e:
-        await update.message.reply_text(f"An error occurred: {e}")
-
-async def handle_file_deletion(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle file deletion from channel"""
-    query = update.callback_query
-    await query.answer()
-
-    channel_message_id = int(query.data.split("_")[1])
-
-    if channel_message_id in uploaded_files and uploaded_files[channel_message_id]["user_id"] == query.from_user.id:
-        try:
-            await context.bot.delete_message(chat_id=CHANNEL_USERNAME, message_id=channel_message_id)
-            del uploaded_files[channel_message_id]
-            await query.edit_message_text("File successfully deleted!")
-        except Exception as e:
-            await query.edit_message_text(f"Failed to delete the file: {e}")
-    else:
-        await query.edit_message_text("You do not have permission to delete this file or it no longer exists.")
-
-async def initialize_bot():
-    """Initialize the Telegram bot handlers"""
-    global application
-    
-    application = ApplicationBuilder().token(BOT_TOKEN).build()
-
-    # Add file handler
-    application.add_handler(MessageHandler(filters.Document.ALL | filters.PHOTO | filters.VIDEO | filters.AUDIO, handle_file_upload))
-
-    # Add callback query handler for delete button
-    application.add_handler(CallbackQueryHandler(handle_file_deletion))
-
-    await application.initialize()
-    await application.start()
-    print("Bot handlers initialized successfully")
-
+# Webhook handler
 @app.route('/webhook', methods=['POST'])
-async def webhook():
-    """Handle incoming Telegram updates"""
-    if request.headers.get('content-type') == 'application/json':
-        update_data = request.get_json()
-        
-        # Initialize bot if not already done
-        if application is None:
-            await initialize_bot()
-        
-        # Create Update object from webhook data
-        update = Update.de_json(update_data, application.bot)
-        
-        # Process the update
-        await application.process_update(update)
-        
-        return jsonify({"status": "processed"}), 200
-    return jsonify({"status": "invalid content-type"}), 400
+def webhook():
+    update = request.get_json()
+    if not update:
+        return jsonify({"status": "no data"}), 400
 
-@app.route("/", methods=['GET'])
+    # Handle callback queries (delete button)
+    if "callback_query" in update:
+        callback = update["callback_query"]
+        chat_id = callback["message"]["chat"]["id"]
+        message_id = callback["message"]["message_id"]
+        user_id = callback["from"]["id"]
+        callback_data = callback["data"]
+
+        if callback_data.startswith("delete_"):
+            channel_message_id = int(callback_data.split("_")[1])
+            if (channel_message_id in uploaded_files and 
+                uploaded_files[channel_message_id]["user_id"] == user_id):
+                if delete_message(CHANNEL_USERNAME, channel_message_id):
+                    del uploaded_files[channel_message_id]
+                    send_message(chat_id, "File successfully deleted!")
+                else:
+                    send_message(chat_id, "Failed to delete the file.")
+            else:
+                send_message(chat_id, "You don’t have permission to delete this file or it no longer exists.")
+        return jsonify({"status": "processed"}), 200
+
+    # Handle messages
+    if "message" not in update:
+        return jsonify({"status": "ignored"}), 200
+
+    message = update["message"]
+    chat_id = message["chat"]["id"]
+    user_id = message["from"]["id"]
+
+    # Command handlers
+    if "text" in message:
+        text = message["text"]
+        if text == "/start":
+            send_message(chat_id, "Welcome! Send me a file, and I'll upload it to the channel and share the URL.")
+        elif text == "/help":
+            help_text = """
+Available commands:
+/start - Start the bot and get instructions.
+/help - Show this help message.
+/restart - Restart the bot (clears cached data).
+/upload - Learn how to upload files to the bot.
+            """
+            send_message(chat_id, help_text)
+        elif text == "/restart":
+            uploaded_files.clear()
+            send_message(chat_id, "Bot has been restarted. All cached data has been cleared.")
+        elif text == "/upload":
+            upload_instructions = """
+To upload a file:
+1. Send a file (document, photo, video, or audio) to this bot.
+2. The bot will upload it to the channel and provide a URL.
+3. You can delete the file using the "Delete File" button.
+            """
+            send_message(chat_id, upload_instructions)
+        return jsonify({"status": "processed"}), 200
+
+    # Handle file uploads
+    file_id = None
+    file_type = None
+    if "document" in message:
+        file_id = message["document"]["file_id"]
+        file_type = "document"
+    elif "photo" in message:
+        file_id = message["photo"][-1]["file_id"]  # Largest photo size
+        file_type = "photo"
+    elif "video" in message:
+        file_id = message["video"]["file_id"]
+        file_type = "video"
+    elif "audio" in message:
+        file_id = message["audio"]["file_id"]
+        file_type = "audio"
+
+    if file_id:
+        # Send file to channel
+        result = send_file_to_channel(file_id, file_type)
+        if result and result.get("ok"):
+            channel_message_id = result["result"]["message_id"]
+            channel_url = f"https://t.me/{CHANNEL_USERNAME[1:]}/{channel_message_id}"
+
+            # Store file info
+            uploaded_files[channel_message_id] = {
+                "file_id": file_id,
+                "file_type": file_type,
+                "user_id": user_id
+            }
+
+            # Send URL with delete button
+            reply_markup = {
+                "inline_keyboard": [[{"text": "Delete File", "callback_data": f"delete_{channel_message_id}"}]]
+            }
+            send_message(chat_id, f"File uploaded to the channel! Here's the URL:\n{channel_url}", reply_markup)
+        else:
+            send_message(chat_id, "Failed to upload the file to the channel.")
+    else:
+        send_message(chat_id, "Please send a valid file (document, photo, video, or audio).")
+
+    return jsonify({"status": "processed"}), 200
+
+# Index route
+@app.route('/', methods=['GET'])
 def index():
-    return "<h1>Telegram File Upload Bot is Running</h1>"
+    return "<h1>Telegram Bot Webhook is Running</h1>"
 
 if __name__ == '__main__':
-    # Initialize the bot
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(initialize_bot())
-    
-    # Run the Flask app
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+    port = int(os.getenv("PORT", 5000))  # Vercel sets PORT
+    app.run(host="0.0.0.0", port=port, debug=True)
