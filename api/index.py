@@ -4,6 +4,7 @@ from flask import Flask, Response, request, jsonify
 from datetime import datetime
 import json
 import hashlib
+import time
 
 # Flask application
 app = Flask(__name__)
@@ -16,9 +17,10 @@ CHANNEL_USERNAME = '@cdntelegraph'
 BASE_API_URL = f"https://api.telegram.org/bot{TOKEN}"
 
 # Data storage
-uploaded_files = {}  # Track files uploaded by the bot
-user_settings = {}  # Store user preferences
-file_tags = {}      # Store tags for files
+uploaded_files = {}
+user_settings = {}
+file_tags = {}
+rate_limits = {}  # New: Track user rate limits
 
 # Helper functions
 def send_message(chat_id, text, reply_markup=None):
@@ -26,64 +28,75 @@ def send_message(chat_id, text, reply_markup=None):
     payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
     if reply_markup:
         payload["reply_markup"] = reply_markup
-    response = requests.post(url, json=payload)
-    if response.status_code != 200:
-        print(f"Error sending message: {response.text}")
-    return response.json()
-
-def send_file_to_channel(file_id, file_type, chat_id=CHANNEL_USERNAME):
-    if file_type == "document":
-        method = "sendDocument"
-        payload_key = "document"
-    elif file_type == "photo":
-        method = "sendPhoto"
-        payload_key = "photo"
-    elif file_type == "video":
-        method = "sendVideo"
-        payload_key = "video"
-    elif file_type == "audio":
-        method = "sendAudio"
-        payload_key = "audio"
-    else:
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error sending message: {e}")
         return None
 
+def send_file_to_channel(file_id, file_type, chat_id=CHANNEL_USERNAME):
+    methods = {
+        "document": ("sendDocument", "document"),
+        "photo": ("sendPhoto", "photo"),
+        "video": ("sendVideo", "video"),
+        "audio": ("sendAudio", "audio")
+    }
+    if file_type not in methods:
+        return None
+    method, payload_key = methods[file_type]
     url = f"{BASE_API_URL}/{method}"
     payload = {"chat_id": chat_id, payload_key: file_id}
-    response = requests.post(url, json=payload)
-    if response.status_code != 200:
-        print(f"Error sending file: {response.text}")
-    return response.json()
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error sending file: {e}")
+        return None
 
 def delete_message(chat_id, message_id):
     url = f"{BASE_API_URL}/deleteMessage"
     payload = {"chat_id": chat_id, "message_id": message_id}
-    response = requests.post(url, json=payload)
-    if response.status_code != 200:
-        print(f"Error deleting message: {response.text}")
-    return response.status_code == 200
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        return response.status_code == 200
+    except requests.RequestException as e:
+        print(f"Error deleting message: {e}")
+        return False
 
 def get_file_info(file_id):
     url = f"{BASE_API_URL}/getFile"
     payload = {"file_id": file_id}
-    response = requests.post(url, json=payload)
-    return response.json() if response.status_code == 200 else None
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        return response.json() if response.status_code == 200 else None
+    except requests.RequestException:
+        return None
 
 def send_typing_action(chat_id):
     url = f"{BASE_API_URL}/sendChatAction"
     payload = {"chat_id": chat_id, "action": "typing"}
-    requests.post(url, json=payload)
+    requests.post(url, json=payload, timeout=5)
 
 def get_channel_stats():
     url = f"{BASE_API_URL}/getChat"
     payload = {"chat_id": CHANNEL_USERNAME}
-    response = requests.post(url, json=payload)
-    return response.json() if response.status_code == 200 else None
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        return response.json() if response.status_code == 200 else None
+    except requests.RequestException:
+        return None
 
 def pin_message(chat_id, message_id):
     url = f"{BASE_API_URL}/pinChatMessage"
     payload = {"chat_id": chat_id, "message_id": message_id, "disable_notification": True}
-    response = requests.post(url, json=payload)
-    return response.status_code == 200
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        return response.status_code == 200
+    except requests.RequestException:
+        return False
 
 def send_welcome_message(chat_id, username):
     welcome_text = f"""
@@ -109,36 +122,76 @@ def generate_file_hash(file_id):
 
 def send_poll(chat_id, question, options):
     url = f"{BASE_API_URL}/sendPoll"
-    payload = {
-        "chat_id": chat_id,
-        "question": question,
-        "options": json.dumps(options),
-        "is_anonymous": False
-    }
-    response = requests.post(url, json=payload)
-    return response.json() if response.status_code == 200 else None
+    payload = {"chat_id": chat_id, "question": question, "options": json.dumps(options), "is_anonymous": False}
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        return response.json() if response.status_code == 200 else None
+    except requests.RequestException:
+        return None
 
 def forward_message(chat_id, from_chat_id, message_id):
     url = f"{BASE_API_URL}/forwardMessage"
     payload = {"chat_id": chat_id, "from_chat_id": from_chat_id, "message_id": message_id}
-    response = requests.post(url, json=payload)
-    return response.status_code == 200
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        return response.status_code == 200
+    except requests.RequestException:
+        return False
 
 def ban_user(chat_id, user_id):
     url = f"{BASE_API_URL}/banChatMember"
     payload = {"chat_id": chat_id, "user_id": user_id}
-    response = requests.post(url, json=payload)
-    return response.status_code == 200
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        return response.status_code == 200
+    except requests.RequestException:
+        return False
+
+# New helper functions
+def check_rate_limit(user_id):
+    """Limit users to 5 uploads per hour"""
+    current_time = time.time()
+    if user_id not in rate_limits:
+        rate_limits[user_id] = {"count": 0, "timestamp": current_time}
+    elif current_time - rate_limits[user_id]["timestamp"] > 3600:  # Reset after 1 hour
+        rate_limits[user_id] = {"count": 0, "timestamp": current_time}
+    
+    if rate_limits[user_id]["count"] >= 5:
+        return False
+    rate_limits[user_id]["count"] += 1
+    return True
+
+def get_file_download_link(file_id):
+    """Generate direct download link for a file"""
+    file_info = get_file_info(file_id)
+    if file_info and file_info.get("ok"):
+        file_path = file_info["result"]["file_path"]
+        return f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
+    return None
+
+def cleanup_expired_files():
+    """Remove files older than 24 hours"""
+    current_time = datetime.now()
+    expired = [mid for mid, info in uploaded_files.items() 
+              if (current_time - datetime.fromisoformat(info["timestamp"])).total_seconds() > 86400]
+    for mid in expired:
+        delete_message(CHANNEL_USERNAME, mid)
+        del uploaded_files[mid]
+        if mid in file_tags:
+            del file_tags[mid]
 
 # Set webhook
 @app.route('/setwebhook', methods=['GET', 'POST'])
 def set_webhook():
     vercel_url = os.getenv('VERCEL_URL', 'https://your-project.vercel.app')
     webhook_url = f"{BASE_API_URL}/setWebhook?url={vercel_url}/webhook&allowed_updates=%5B%22message%22,%22callback_query%22%5D"
-    response = requests.get(webhook_url)
-    if response.status_code == 200:
-        return "Webhook successfully set", 200
-    return f"Error setting webhook: {response.text}", response.status_code
+    try:
+        response = requests.get(webhook_url, timeout=10)
+        if response.status_code == 200:
+            return "Webhook successfully set", 200
+        return f"Error setting webhook: {response.text}", response.status_code
+    except requests.RequestException as e:
+        return f"Error setting webhook: {e}", 500
 
 # Webhook handler
 @app.route('/webhook', methods=['POST'])
@@ -205,7 +258,7 @@ def webhook():
             send_welcome_message(chat_id, username)
         elif text == "/help":
             help_text = """
-Available commands:
+<b>Available Commands:</b>
 /start - Start the bot
 /help - Show this help message
 /restart - Clear cached data
@@ -217,21 +270,26 @@ Available commands:
 /search_<tag> - Search by tag
 /poll - Create a poll
 /share_<message_id> - Share file
+/download_<message_id> - Get direct download link
 /settings_notify_on/off - Toggle notifications
 /settings_lang_en/es/fr - Set language
-/ban_<user_id> - Ban user (admin)
+/ban_<user_id> - Ban user (admin only)
+/cleanup - Remove expired files (admin only)
 """
-            send_message(chat_id, help_text)
+            if send_message(chat_id, help_text) is None:
+                send_message(chat_id, "Error displaying help. Please try again.")
         elif text == "/restart":
             uploaded_files.clear()
             file_tags.clear()
+            rate_limits.clear()
             send_message(chat_id, "Bot restarted. All cached data cleared.")
         elif text == "/upload":
             upload_instructions = """
-To upload a file:
+<b>To upload a file:</b>
 1. Send a file (document, photo, video, or audio)
 2. Get a URL and management options
 3. Use buttons to delete/pin/share
+<i>Limit: 5 uploads per hour</i>
 """
             send_message(chat_id, upload_instructions)
         elif text == "/stats":
@@ -239,11 +297,11 @@ To upload a file:
             if stats and stats.get("ok"):
                 result = stats["result"]
                 stats_text = f"""
-Channel Statistics:
+<b>Channel Statistics:</b>
 🏷️ Title: {result.get("title", "N/A")}
 👥 Members: {result.get("members_count", "N/A")}
 📝 Description: {result.get("description", "No description")}
-Total uploads: {len(uploaded_files)}
+📂 Total uploads: {len(uploaded_files)}
 """
                 send_message(chat_id, stats_text)
             else:
@@ -252,7 +310,7 @@ Total uploads: {len(uploaded_files)}
             if not uploaded_files:
                 send_message(chat_id, "No files uploaded yet.")
             else:
-                file_list = "Your Uploaded Files:\n"
+                file_list = "<b>Your Uploaded Files:</b>\n"
                 user_files = [f for f, v in uploaded_files.items() if v["user_id"] == user_id]
                 if not user_files:
                     send_message(chat_id, "You haven't uploaded any files.")
@@ -261,7 +319,7 @@ Total uploads: {len(uploaded_files)}
                         if info["user_id"] == user_id:
                             url = f"https://t.me/{CHANNEL_USERNAME[1:]}/{message_id}"
                             tags = ", ".join(file_tags.get(message_id, []))
-                            file_list += f"[{info['file_type']}] {url} (Tags: {tags or 'None'})\n"
+                            file_list += f"[{info['file_type']}] <a href='{url}'>Link</a> (Tags: {tags or 'None'})\n"
                     send_message(chat_id, file_list)
         elif text.startswith("/pin_"):
             try:
@@ -293,9 +351,9 @@ Total uploads: {len(uploaded_files)}
             for message_id, tags in file_tags.items():
                 if query in tags and uploaded_files[message_id]["user_id"] == user_id:
                     url = f"https://t.me/{CHANNEL_USERNAME[1:]}/{message_id}"
-                    matches.append(f"[{uploaded_files[message_id]['file_type']}] {url}")
+                    matches.append(f"[{uploaded_files[message_id]['file_type']}] <a href='{url}'>Link</a>")
             if matches:
-                send_message(chat_id, "Found files:\n" + "\n".join(matches))
+                send_message(chat_id, "<b>Found files:</b>\n" + "\n".join(matches))
             else:
                 send_message(chat_id, "No files found with that tag.")
         elif text == "/poll":
@@ -320,6 +378,19 @@ Total uploads: {len(uploaded_files)}
                     send_message(chat_id, "You can only share your own files!")
             except (IndexError, ValueError):
                 send_message(chat_id, "Usage: /share_<message_id>")
+        elif text.startswith("/download_"):
+            try:
+                message_id = int(text.split("_")[1])
+                if message_id in uploaded_files and uploaded_files[message_id]["user_id"] == user_id:
+                    download_link = get_file_download_link(uploaded_files[message_id]["file_id"])
+                    if download_link:
+                        send_message(chat_id, f"Direct download link: <a href='{download_link}'>Download</a>")
+                    else:
+                        send_message(chat_id, "Failed to generate download link.")
+                else:
+                    send_message(chat_id, "You can only download your own files!")
+            except (IndexError, ValueError):
+                send_message(chat_id, "Usage: /download_<message_id>")
         elif text.startswith("/settings_"):
             try:
                 setting, value = text.split("_")[1:]
@@ -329,12 +400,14 @@ Total uploads: {len(uploaded_files)}
                 elif setting == "lang" and value in ["en", "es", "fr"]:
                     user_settings[user_id]["lang"] = value
                     send_message(chat_id, f"Language set to {value}")
+                else:
+                    raise ValueError
             except (IndexError, ValueError):
                 settings_text = f"""
-Settings commands:
+<b>Settings commands:</b>
 - /settings_notify_on/off - Toggle notifications
 - /settings_lang_en/es/fr - Set language
-Current settings:
+<b>Current settings:</b>
 - Notifications: {user_settings[user_id]['notify']}
 - Language: {user_settings[user_id]['lang']}
 """
@@ -348,12 +421,19 @@ Current settings:
                     send_message(chat_id, "Failed to ban user.")
             except (IndexError, ValueError):
                 send_message(chat_id, "Usage: /ban_<user_id> (Admin only)")
+        elif text == "/cleanup" and message["from"].get("is_admin", False):
+            cleanup_expired_files()
+            send_message(chat_id, "Expired files cleaned up!")
         return jsonify({"status": "processed"}), 200
 
     # Handle file uploads
     if any(key in message for key in ["document", "photo", "video", "audio"]):
         send_typing_action(chat_id)
         
+        if not check_rate_limit(user_id):
+            send_message(chat_id, "Upload limit reached (5/hour). Please wait!")
+            return jsonify({"status": "rate_limited"}), 429
+
         file_id = None
         file_type = None
         file_size = 0
@@ -405,12 +485,13 @@ Current settings:
                 
                 size_mb = file_size / (1024 * 1024)
                 response_text = f"""
-File uploaded successfully!
-URL: {channel_url}
+<b>File uploaded successfully!</b>
+URL: <a href='{channel_url}'>Link</a>
 Type: {file_type}
 Size: {size_mb:.2f} MB
 Use /tag_{channel_message_id}_<tag> to add tags
 Use /share_{channel_message_id} to share
+Use /download_{channel_message_id} for direct link
 """
                 if user_settings[user_id]["notify"]:
                     send_message(chat_id, response_text, reply_markup)
