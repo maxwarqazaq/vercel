@@ -267,7 +267,7 @@ Use the buttons below to get started.
 • Advanced analytics
 
 <b>Support:</b>
-For assistance, contact our support team @YourSupportChannel.
+For assistance, contact our support team @MAXWARORG.
 """
 
     @staticmethod
