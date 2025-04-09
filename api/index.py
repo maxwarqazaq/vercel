@@ -1,363 +1,463 @@
 import os
 import requests
-import logging
-from flask import Flask, request, jsonify
+from flask import Flask, Response, request, jsonify
 from datetime import datetime
-from typing import Optional, Dict, Any
 
-# Flask application setup
+# Flask application
 app = Flask(__name__)
 
-# Logging configuration
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('app.log')  # Log to a file for persistence
-    ]
-)
-logger = logging.getLogger(__name__)
-
 # Bot configuration
-TOKEN = os.getenv('TOKEN')
-CHANNEL_USERNAME = '@cdntelegraph'
-BASE_API_URL = f"https://api.telegram.org/bot{TOKEN}"
-
+TOKEN = os.getenv('TOKEN')  # Fetch token from Vercel environment variables
 if not TOKEN:
-    logger.error("Bot token not set in environment variables")
-    raise ValueError("Bot token not set! Configure 'TOKEN' in environment variables.")
+    raise ValueError("Bot token is not set in environment variables! Set 'TOKEN' in Vercel settings.")
+CHANNEL_USERNAME = '@cdntelegraph'  # Channel username
+BASE_API_URL = f"https://api.telegram.org/bot{TOKEN}"
+ADMIN_IDS = [123456789]  # Replace with your admin user IDs
 
-# In-memory storage with a cap
-MAX_FILES = 1000
-uploaded_files: Dict[int, Dict[str, Any]] = {}
+# Dictionary to track files uploaded by the bot
+uploaded_files = {}
 
-# Helper function to manage in-memory storage
-def manage_uploaded_files(channel_message_id: int, file_data: Optional[Dict] = None) -> Optional[Dict]:
-    if file_data is not None:  # Store
-        if len(uploaded_files) >= MAX_FILES:
-            logger.warning("Max file limit reached, removing oldest entry")
-            oldest_key = next(iter(uploaded_files))
-            del uploaded_files[oldest_key]
-        uploaded_files[channel_message_id] = file_data
-        return file_data
-    else:  # Retrieve
-        return uploaded_files.get(channel_message_id)
+# Helper function to create stylish inline keyboards
+def create_inline_keyboard(buttons, columns=2):
+    keyboard = []
+    row = []
+    for i, button in enumerate(buttons, 1):
+        row.append(button)
+        if i % columns == 0:
+            keyboard.append(row)
+            row = []
+    if row:  # Add remaining buttons if any
+        keyboard.append(row)
+    return {"inline_keyboard": keyboard}
 
-def delete_uploaded_file(channel_message_id: int):
-    if channel_message_id in uploaded_files:
-        del uploaded_files[channel_message_id]
+# Helper function to create stylish reply keyboards
+def create_reply_keyboard(buttons, resize=True, one_time=False):
+    keyboard = []
+    row = []
+    for button in buttons:
+        row.append({"text": button})
+    keyboard.append(row)
+    return {
+        "keyboard": keyboard,
+        "resize_keyboard": resize,
+        "one_time_keyboard": one_time,
+        "selective": True
+    }
 
-# Telegram API call without rate limiting
-def telegram_api_call(method: str, payload: Dict) -> Optional[Dict]:
-    url = f"{BASE_API_URL}/{method}"
-    try:
-        logger.debug(f"Making API call: {method} with payload: {payload}")
-        response = requests.post(url, json=payload, timeout=3)  # Reduced timeout
-        response.raise_for_status()
-        result = response.json()
-        if not result.get("ok"):
-            logger.error(f"Telegram API error: {result}")
-            return None
-        return result
-    except requests.RequestException as e:
-        logger.error(f"API call failed: {str(e)}")
-        return None
-    except ValueError as e:
-        logger.error(f"JSON parsing failed: {str(e)}")
-        return None
-    except Exception as e:
-        logger.error(f"Unexpected error in API call: {str(e)}")
-        return None
-
-# Stylish message templates with buttons
-class MessageTemplates:
-    @staticmethod
-    def welcome(channel: str) -> tuple[str, Dict]:
-        text = f"""
-🌟 <b>Welcome to FileShare Pro</b> 🌟
-Your premium file sharing assistant!
-Upload files to {channel} with ease.
-        """
-        markup = {
-            "inline_keyboard": [
-                [{"text": "📖 How to Use", "callback_data": "show_upload"}],
-                [{"text": "ℹ️ About", "callback_data": "show_about"}]
-            ]
-        }
-        return text, markup
-
-    @staticmethod
-    def help() -> tuple[str, Dict]:
-        text = """
-📚 <b>Command Center</b> 📚
-Control your file sharing experience:
-        """
-        markup = {
-            "inline_keyboard": [
-                [{"text": "🚀 Start", "callback_data": "cmd_start"}],
-                [{"text": "📤 Upload Guide", "callback_data": "show_upload"}],
-                [{"text": "🔄 Restart", "callback_data": "cmd_restart"}],
-                [{"text": "ℹ️ About", "callback_data": "show_about"}]
-            ]
-        }
-        return text, markup
-
-    @staticmethod
-    def upload_guide() -> tuple[str, Dict]:
-        text = """
-📤 <b>Upload Master Guide</b> 📤
-1. Send any file to me
-2. Get a shareable link
-3. Manage with buttons
-        """
-        markup = {
-            "inline_keyboard": [
-                [{"text": "🎯 Try Now", "callback_data": "cmd_start"}],
-                [{"text": "❓ Help", "callback_data": "show_help"}]
-            ]
-        }
-        return text, markup
-
-    @staticmethod
-    def about() -> tuple[str, Dict]:
-        text = """
-🤖 <b>FileShare Pro</b> 🤖
-Version: 2.1
-Powered by: xAI
-Updated: April 2025
-        """
-        markup = {
-            "inline_keyboard": [
-                [{"text": "🌐 Support", "url": "https://t.me/xAISupport"}],
-                [{"text": "🏠 Home", "callback_data": "cmd_start"}]
-            ]
-        }
-        return text, markup
-
-# Core functions
-def send_message(chat_id: int, text: str, reply_markup: Optional[Dict] = None) -> Optional[Dict]:
+# Helper function to send a message with HTML formatting
+def send_message(chat_id, text, reply_markup=None, disable_web_page_preview=True):
+    url = f"{BASE_API_URL}/sendMessage"
     payload = {
         "chat_id": chat_id,
-        "text": text.strip(),
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": disable_web_page_preview
+    }
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
+    response = requests.post(url, json=payload)
+    if response.status_code != 200:
+        print(f"Error sending message: {response.text}")
+    return response.json()
+
+# Helper function to edit message text
+def edit_message_text(chat_id, message_id, text, reply_markup=None):
+    url = f"{BASE_API_URL}/editMessageText"
+    payload = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "text": text,
         "parse_mode": "HTML"
     }
     if reply_markup:
         payload["reply_markup"] = reply_markup
-    return telegram_api_call("sendMessage", payload)
+    response = requests.post(url, json=payload)
+    if response.status_code != 200:
+        print(f"Error editing message: {response.text}")
+    return response.json()
 
-def send_file_to_channel(file_id: str, file_type: str, chat_id: str = CHANNEL_USERNAME) -> Optional[Dict]:
-    file_methods = {
+# Helper function to send a file to the channel
+def send_file_to_channel(file_id, file_type, caption=None, chat_id=CHANNEL_USERNAME):
+    methods = {
         "document": ("sendDocument", "document"),
         "photo": ("sendPhoto", "photo"),
         "video": ("sendVideo", "video"),
-        "audio": ("sendAudio", "audio")
+        "audio": ("sendAudio", "audio"),
+        "voice": ("sendVoice", "voice")
     }
-    if file_type not in file_methods:
-        logger.warning(f"Unsupported file type: {file_type}")
+    
+    if file_type not in methods:
         return None
-    method, payload_key = file_methods[file_type]
+
+    method, payload_key = methods[file_type]
+    url = f"{BASE_API_URL}/{method}"
     payload = {"chat_id": chat_id, payload_key: file_id}
-    return telegram_api_call(method, payload)
+    if caption:
+        payload["caption"] = caption
+        payload["parse_mode"] = "HTML"
+    response = requests.post(url, json=payload)
+    if response.status_code != 200:
+        print(f"Error sending file: {response.text}")
+    return response.json()
 
-def delete_message(chat_id: str, message_id: int) -> bool:
+# Helper function to delete a message
+def delete_message(chat_id, message_id):
+    url = f"{BASE_API_URL}/deleteMessage"
     payload = {"chat_id": chat_id, "message_id": message_id}
-    result = telegram_api_call("deleteMessage", payload)
-    return bool(result and result.get("ok"))
+    response = requests.post(url, json=payload)
+    if response.status_code != 200:
+        print(f"Error deleting message: {response.text}")
+    return response.status_code == 200
 
-# Global error handler
-@app.errorhandler(Exception)
-def handle_exception(e):
-    logger.error(f"Unhandled exception: {str(e)}", exc_info=True)
-    return jsonify({"status": "error", "message": "Internal server error"}), 500
+# Helper function to get user info
+def get_user_info(user_id):
+    url = f"{BASE_API_URL}/getChat"
+    payload = {"chat_id": user_id}
+    response = requests.post(url, json=payload)
+    if response.status_code == 200:
+        return response.json().get("result", {})
+    return {}
 
-# Health check endpoint
-@app.route('/health', methods=['GET'])
-def health():
-    return jsonify({"status": "healthy", "timestamp": datetime.now().isoformat()}), 200
+# Helper function to send typing action
+def send_typing_action(chat_id):
+    url = f"{BASE_API_URL}/sendChatAction"
+    payload = {"chat_id": chat_id, "action": "typing"}
+    requests.post(url, json=payload)
 
-# Webhook setup
+# Helper function to create stylish file info message
+def create_file_info_message(file_data, channel_url):
+    file_type_emoji = {
+        "document": "📄",
+        "photo": "🖼️",
+        "video": "🎬",
+        "audio": "🎵",
+        "voice": "🎤"
+    }.get(file_data["file_type"], "📁")
+    
+    user_info = get_user_info(file_data["user_id"])
+    username = user_info.get("username", "Unknown")
+    first_name = user_info.get("first_name", "User")
+    
+    upload_time = datetime.fromtimestamp(file_data["timestamp"]).strftime('%Y-%m-%d %H:%M:%S')
+    
+    return f"""
+{file_type_emoji} <b>File Successfully Uploaded!</b>
+
+👤 <b>Uploaded by:</b> {first_name} (@{username})
+📅 <b>Upload time:</b> {upload_time}
+
+🔗 <b>Channel URL:</b> <a href="{channel_url}">Click here to view</a>
+
+<i>You can delete this file using the button below.</i>
+"""
+
+# Set webhook for Vercel
 @app.route('/setwebhook', methods=['GET', 'POST'])
 def set_webhook():
     vercel_url = os.getenv('VERCEL_URL', 'https://your-project.vercel.app')
-    if not vercel_url:
-        logger.error("VERCEL_URL not set in environment variables")
-        return "VERCEL_URL not set", 500
     webhook_url = f"{BASE_API_URL}/setWebhook?url={vercel_url}/webhook&allowed_updates=%5B%22message%22,%22callback_query%22%5D"
-    try:
-        response = requests.get(webhook_url, timeout=3)
-        response.raise_for_status()
-        result = response.json()
-        if not result.get("ok"):
-            logger.error(f"Failed to set webhook: {result}")
-            return f"Failed to set webhook: {result}", 500
-        logger.info("Webhook set successfully")
+    response = requests.get(webhook_url)
+    if response.status_code == 200:
         return "Webhook successfully set", 200
-    except requests.RequestException as e:
-        logger.error(f"Webhook setup failed: {str(e)}")
-        return f"Error setting webhook: {str(e)}", 500
+    return f"Error setting webhook: {response.text}", response.status_code
 
 # Webhook handler
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    try:
-        update = request.get_json()
-        if not update:
-            logger.warning("No data received in webhook")
-            return jsonify({"status": "no data"}), 400
+    update = request.get_json()
+    if not update:
+        return jsonify({"status": "no data"}), 400
 
-        # Handle callback queries
-        if "callback_query" in update:
-            callback = update["callback_query"]
-            chat_id = callback["message"]["chat"]["id"]
-            user_id = callback["from"]["id"]
-            callback_data = callback["data"]
+    # Handle callback queries (buttons)
+    if "callback_query" in update:
+        callback = update["callback_query"]
+        chat_id = callback["message"]["chat"]["id"]
+        message_id = callback["message"]["message_id"]
+        user_id = callback["from"]["id"]
+        callback_data = callback["data"]
 
-            handlers = {
-                "cmd_start": MessageTemplates.welcome(CHANNEL_USERNAME),
-                "show_help": MessageTemplates.help(),
-                "show_upload": MessageTemplates.upload_guide(),
-                "show_about": MessageTemplates.about(),
-                "cmd_restart": ("🔄 Bot restarted! Cache cleared.", None)
-            }
-
-            if callback_data.startswith("delete_"):
-                try:
-                    channel_message_id = int(callback_data.split("_")[1])
-                    file_data = manage_uploaded_files(channel_message_id)
-                    if file_data and file_data["user_id"] == user_id:
-                        if delete_message(CHANNEL_USERNAME, channel_message_id):
-                            delete_uploaded_file(channel_message_id)
-                            send_message(chat_id, "✅ File deleted successfully!")
-                        else:
-                            send_message(chat_id, "❌ Deletion failed")
+        if callback_data.startswith("delete_"):
+            channel_message_id = int(callback_data.split("_")[1])
+            if channel_message_id in uploaded_files:
+                file_data = uploaded_files[channel_message_id]
+                # Check if user is admin or original uploader
+                if user_id in ADMIN_IDS or file_data["user_id"] == user_id:
+                    if delete_message(CHANNEL_USERNAME, channel_message_id):
+                        del uploaded_files[channel_message_id]
+                        # Edit original message to show success
+                        edit_message_text(
+                            chat_id, 
+                            message_id,
+                            "✅ <b>File successfully deleted from the channel!</b>",
+                            reply_markup=None
+                        )
                     else:
-                        send_message(chat_id, "⚠️ No permission or file not found")
-                except (IndexError, ValueError) as e:
-                    logger.error(f"Invalid callback data: {callback_data}, error: {str(e)}")
-                    send_message(chat_id, "❌ Invalid request")
-            
-            elif callback_data in handlers:
-                text, markup = handlers[callback_data]
-                if callback_data == "cmd_restart":
-                    uploaded_files.clear()
-                send_message(chat_id, text, markup)
-
-            return jsonify({"status": "processed"}), 200
-
-        # Handle messages
-        message = update.get("message")
-        if not message:
-            logger.info("No message in update")
-            return jsonify({"status": "ignored"}), 200
-
-        chat_id = message["chat"]["id"]
-        user_id = message["from"]["id"]
-
-        # Command handling
-        if "text" in message:
-            text = message["text"].lower()
-            commands = {
-                "/start": MessageTemplates.welcome(CHANNEL_USERNAME),
-                "/help": MessageTemplates.help(),
-                "/upload": MessageTemplates.upload_guide(),
-                "/about": MessageTemplates.about(),
-                "/restart": ("🔄 Bot restarting...", {
-                    "inline_keyboard": [[{"text": "✅ Confirm", "callback_data": "cmd_restart"}]]
-                })
-            }
-            
-            if text in commands:
-                text, markup = commands[text]
-                send_message(chat_id, text, markup)
-                return jsonify({"status": "processed"}), 200
-
-        # File upload handling
-        file_types = {
-            "document": ("document", "file_id"),
-            "photo": ("photo", -1),
-            "video": ("video", "file_id"),
-            "audio": ("audio", "file_id")
-        }
-
-        file_id = None
-        file_type = None
-        for f_type, (key, attr) in file_types.items():
-            if key in message:
-                try:
-                    file_id = message[key][attr]["file_id"] if key == "photo" else message[key][attr]
-                    file_type = f_type
-                    break
-                except (KeyError, IndexError) as e:
-                    logger.error(f"Failed to parse file data: {str(e)}")
-                    send_message(chat_id, "❌ Invalid file data", {
-                        "inline_keyboard": [[{"text": "📖 Learn How", "callback_data": "show_upload"}]]
-                    })
-                    return jsonify({"status": "processed"}), 200
-
-        if file_id:
-            if file_type not in file_types:
-                send_message(chat_id, "❌ Unsupported file type", {
-                    "inline_keyboard": [[{"text": "📖 Learn How", "callback_data": "show_upload"}]]
-                })
-                return jsonify({"status": "processed"}), 200
-            result = send_file_to_channel(file_id, file_type)
-            if result and result.get("ok"):
-                channel_message_id = result["result"]["message_id"]
-                channel_url = f"https://t.me/{CHANNEL_USERNAME[1:]}/{channel_message_id}"
-                
-                file_data = {
-                    "file_id": file_id,
-                    "file_type": file_type,
-                    "user_id": user_id,
-                    "timestamp": datetime.now().isoformat()
-                }
-                manage_uploaded_files(channel_message_id, file_data)
-
-                reply_markup = {
-                    "inline_keyboard": [
-                        [
-                            {"text": "🗑️ Delete", "callback_data": f"delete_{channel_message_id}"},
-                            {"text": "🌐 Open", "url": channel_url}
-                        ],
-                        [
-                            {"text": "📋 Share", "switch_inline_query": channel_url},
-                            {"text": "🏠 Home", "callback_data": "cmd_start"}
-                        ]
-                    ]
-                }
-                send_message(chat_id, 
-                            f"🎉 <b>File Uploaded!</b>\n"
-                            f"🔗 <a href='{channel_url}'>Link</a>\n"
-                            f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-                            reply_markup)
+                        edit_message_text(
+                            chat_id,
+                            message_id,
+                            "❌ <b>Failed to delete the file.</b>\n\nPlease try again later or contact admin.",
+                            reply_markup=callback["message"].get("reply_markup")
+                        )
+                else:
+                    edit_message_text(
+                        chat_id,
+                        message_id,
+                        "⛔ <b>Permission Denied</b>\n\nYou don't have permission to delete this file.",
+                        reply_markup=callback["message"].get("reply_markup")
+                    )
             else:
-                logger.error(f"File upload failed: {result}")
-                send_message(chat_id, "❌ Upload failed", {
-                    "inline_keyboard": [[{"text": "🔄 Retry", "callback_data": "show_upload"}]]
-                })
-        else:
-            send_message(chat_id, "📎 Send a valid file!", {
-                "inline_keyboard": [[{"text": "📖 Learn How", "callback_data": "show_upload"}]]
-            })
-
+                edit_message_text(
+                    chat_id,
+                    message_id,
+                    "⚠️ <b>File not found</b>\n\nThis file may have already been deleted.",
+                    reply_markup=None
+                )
+        elif callback_data == "help":
+            show_help(chat_id, message_id)
+        elif callback_data == "upload_instructions":
+            show_upload_instructions(chat_id, message_id)
         return jsonify({"status": "processed"}), 200
 
-    except Exception as e:
-        logger.error(f"Error in webhook: {str(e)}", exc_info=True)
-        return jsonify({"status": "error", "message": "Internal server error"}), 500
+    # Handle messages
+    if "message" not in update:
+        return jsonify({"status": "ignored"}), 200
 
+    message = update["message"]
+    chat_id = message["chat"]["id"]
+    user_id = message["from"]["id"]
+
+    # Command handlers
+    if "text" in message:
+        text = message["text"]
+        if text.startswith("/"):
+            send_typing_action(chat_id)
+            
+            if text == "/start":
+                welcome_message = """
+🌟 <b>Welcome to File Uploader Bot!</b> 🌟
+
+I can upload your files to our channel and provide you with a shareable link.
+
+<b>Main Features:</b>
+• Upload documents, photos, videos, and audio files
+• Get direct links to your uploaded files
+• Delete your files anytime
+• Simple and intuitive interface
+
+Use the buttons below to get started or type /help for more information.
+"""
+                buttons = [
+                    {"text": "📤 Upload File", "callback_data": "upload_instructions"},
+                    {"text": "ℹ️ Help", "callback_data": "help"},
+                    {"text": "🛠️ Admin Panel", "callback_data": "admin_panel"} if user_id in ADMIN_IDS else None
+                ]
+                buttons = [b for b in buttons if b is not None]  # Remove None for non-admins
+                
+                reply_markup = create_inline_keyboard(buttons, columns=2)
+                send_message(chat_id, welcome_message, reply_markup)
+                
+            elif text == "/help":
+                show_help(chat_id)
+            elif text == "/restart":
+                if user_id in ADMIN_IDS:
+                    uploaded_files.clear()
+                    send_message(chat_id, "🔄 <b>Bot has been restarted.</b>\n\nAll cached data has been cleared.")
+                else:
+                    send_message(chat_id, "⛔ <b>Permission Denied</b>\n\nOnly admins can use this command.")
+            elif text == "/upload":
+                show_upload_instructions(chat_id)
+            elif text == "/stats" and user_id in ADMIN_IDS:
+                stats_message = f"""
+📊 <b>Bot Statistics</b>
+
+• Total files uploaded: {len(uploaded_files)}
+• Active users: {len({v['user_id'] for v in uploaded_files.values()})}
+
+<b>Storage Status:</b>
+The bot is functioning normally.
+"""
+                send_message(chat_id, stats_message)
+            else:
+                send_message(chat_id, "❓ <b>Unknown Command</b>\n\nType /help to see available commands.")
+        return jsonify({"status": "processed"}), 200
+
+    # Handle file uploads
+    file_id = None
+    file_type = None
+    caption = None
+    
+    if "caption" in message:
+        caption = message["caption"]
+    
+    if "document" in message:
+        file_id = message["document"]["file_id"]
+        file_type = "document"
+    elif "photo" in message:
+        file_id = message["photo"][-1]["file_id"]  # Largest photo size
+        file_type = "photo"
+    elif "video" in message:
+        file_id = message["video"]["file_id"]
+        file_type = "video"
+    elif "audio" in message:
+        file_id = message["audio"]["file_id"]
+        file_type = "audio"
+    elif "voice" in message:
+        file_id = message["voice"]["file_id"]
+        file_type = "voice"
+
+    if file_id:
+        send_typing_action(chat_id)
+        # Send file to channel
+        result = send_file_to_channel(file_id, file_type, caption)
+        if result and result.get("ok"):
+            channel_message_id = result["result"]["message_id"]
+            channel_url = f"https://t.me/{CHANNEL_USERNAME[1:]}/{channel_message_id}"
+
+            # Store file info with timestamp
+            uploaded_files[channel_message_id] = {
+                "file_id": file_id,
+                "file_type": file_type,
+                "user_id": user_id,
+                "timestamp": message["date"],
+                "caption": caption
+            }
+
+            # Create stylish message with delete button
+            file_info = create_file_info_message(uploaded_files[channel_message_id], channel_url)
+            
+            buttons = [
+                {"text": "🗑️ Delete File", "callback_data": f"delete_{channel_message_id}"},
+                {"text": "🔗 Copy Link", "url": channel_url},
+                {"text": "📤 Upload Another", "callback_data": "upload_instructions"}
+            ]
+            reply_markup = create_inline_keyboard(buttons)
+            
+            send_message(chat_id, file_info, reply_markup)
+        else:
+            send_message(chat_id, "❌ <b>Upload Failed</b>\n\nSorry, I couldn't upload your file to the channel. Please try again later.")
+    else:
+        send_message(chat_id, "⚠️ <b>Unsupported Content</b>\n\nPlease send a document, photo, video, or audio file to upload.")
+
+    return jsonify({"status": "processed"}), 200
+
+def show_help(chat_id, message_id=None):
+    help_text = """
+📚 <b>File Uploader Bot Help</b>
+
+<b>Available commands:</b>
+/start - Start the bot and get instructions
+/help - Show this help message
+/upload - Learn how to upload files
+
+<b>How to use:</b>
+1. Send me a file (document, photo, video, or audio)
+2. I'll upload it to our channel
+3. You'll get a shareable link
+4. You can delete it anytime with the delete button
+
+<b>Features:</b>
+• Fast and secure file uploading
+• Direct links to your files
+• Delete functionality for your files
+• Support for various file types
+"""
+    buttons = [
+        {"text": "📤 How to Upload", "callback_data": "upload_instructions"},
+        {"text": "🔙 Main Menu", "callback_data": "main_menu"}
+    ]
+    reply_markup = create_inline_keyboard(buttons)
+    
+    if message_id:
+        edit_message_text(chat_id, message_id, help_text, reply_markup)
+    else:
+        send_message(chat_id, help_text, reply_markup)
+
+def show_upload_instructions(chat_id, message_id=None):
+    instructions = """
+📤 <b>How to Upload Files</b>
+
+1. <b>Simple Upload:</b>
+   • Just send me any file (document, photo, video, or audio)
+   • I'll automatically upload it to the channel
+
+2. <b>With Caption:</b>
+   • Send a file with a caption
+   • The caption will be included with your file
+
+3. <b>Supported Formats:</b>
+   • Documents (PDF, Word, Excel, etc.)
+   • Photos (JPG, PNG, etc.)
+   • Videos (MP4, etc.)
+   • Audio files (MP3, etc.)
+
+<b>Note:</b> Large files may take longer to process.
+"""
+    buttons = [
+        {"text": "🔙 Main Menu", "callback_data": "main_menu"},
+        {"text": "ℹ️ General Help", "callback_data": "help"}
+    ]
+    reply_markup = create_inline_keyboard(buttons)
+    
+    if message_id:
+        edit_message_text(chat_id, message_id, instructions, reply_markup)
+    else:
+        send_message(chat_id, instructions, reply_markup)
+
+# Index route
 @app.route('/', methods=['GET'])
 def index():
     return """
-    <h1 style='font-family: Arial, sans-serif; color: #2c3e50;'>
-        🚀 FileShare Pro Server
-    </h1>
-    <p style='font-family: Arial, sans-serif; color: #7f8c8d;'>
-        Status: Active | Time: {time}
-    </p>
-    """.format(time=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Telegram File Uploader Bot</title>
+        <style>
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 20px;
+                color: #333;
+                line-height: 1.6;
+            }
+            h1 {
+                color: #2c3e50;
+                border-bottom: 2px solid #3498db;
+                padding-bottom: 10px;
+            }
+            .status {
+                background-color: #e8f4fc;
+                padding: 15px;
+                border-radius: 5px;
+                margin: 20px 0;
+            }
+            .btn {
+                display: inline-block;
+                background-color: #3498db;
+                color: white;
+                padding: 10px 15px;
+                text-decoration: none;
+                border-radius: 5px;
+                margin: 5px;
+                transition: background-color 0.3s;
+            }
+            .btn:hover {
+                background-color: #2980b9;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Telegram File Uploader Bot</h1>
+        <div class="status">
+            <p><strong>Status:</strong> Running</p>
+            <p>This is the webhook endpoint for the Telegram File Uploader Bot.</p>
+        </div>
+        <a href="https://t.me/your_bot_username" class="btn">Start the Bot</a>
+        <a href="/setwebhook" class="btn">Set Webhook</a>
+    </body>
+    </html>
+    """
 
 if __name__ == '__main__':
     port = int(os.getenv("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=port, debug=True)
