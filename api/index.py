@@ -364,7 +364,7 @@ class CommandHandler:
         
         buttons = [
             {"text": "🏠 Main Menu", "callback_data": "main_menu"},
-            {"text": "🛠️ Support", "url": "https://t.me/MAXWARORG"}
+            {"text": "🛠️ Support", "url": "tg://resolve?domain=maxwarorg"}
         ]
         reply_markup = KeyboardGenerator.create_inline_keyboard(buttons)
         
