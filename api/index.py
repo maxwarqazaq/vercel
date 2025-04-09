@@ -35,11 +35,17 @@ uploaded_files: Dict[int, Dict[str, Any]] = {}
 def telegram_api_call(method: str, payload: Dict) -> Optional[Dict]:
     url = f"{BASE_API_URL}/{method}"
     try:
-        response = requests.post(url, json=payload, timeout=10)
+        response = requests.post(url, json=payload, timeout=5)
         response.raise_for_status()
         return response.json()
     except requests.RequestException as e:
         logger.error(f"API call failed: {str(e)}")
+        return None
+    except ValueError as e:
+        logger.error(f"JSON parsing failed: {str(e)}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error in API call: {str(e)}")
         return None
 
 # Stylish message templates with buttons
@@ -136,13 +142,19 @@ def delete_message(chat_id: str, message_id: int) -> bool:
     result = telegram_api_call("deleteMessage", payload)
     return bool(result and result.get("ok"))
 
+# Global error handler
+@app.errorhandler(Exception)
+def handle_exception(e):
+    logger.error(f"Unhandled exception: {str(e)}", exc_info=True)
+    return jsonify({"status": "error", "message": "Internal server error"}), 500
+
 # Webhook setup
 @app.route('/setwebhook', methods=['GET', 'POST'])
 def set_webhook():
     vercel_url = os.getenv('VERCEL_URL', 'https://your-project.vercel.app')
     webhook_url = f"{BASE_API_URL}/setWebhook?url={vercel_url}/webhook&allowed_updates=%5B%22message%22,%22callback_query%22%5D"
     try:
-        response = requests.get(webhook_url, timeout=10)
+        response = requests.get(webhook_url, timeout=5)
         response.raise_for_status()
         logger.info("Webhook set successfully")
         return "Webhook successfully set", 200
@@ -173,16 +185,20 @@ def webhook():
         }
 
         if callback_data.startswith("delete_"):
-            channel_message_id = int(callback_data.split("_")[1])
-            if (channel_message_id in uploaded_files and 
-                uploaded_files[channel_message_id]["user_id"] == user_id):
-                if delete_message(CHANNEL_USERNAME, channel_message_id):
-                    del uploaded_files[channel_message_id]
-                    send_message(chat_id, "✅ File deleted successfully!")
+            try:
+                channel_message_id = int(callback_data.split("_")[1])
+                if (channel_message_id in uploaded_files and 
+                    uploaded_files[channel_message_id]["user_id"] == user_id):
+                    if delete_message(CHANNEL_USERNAME, channel_message_id):
+                        del uploaded_files[channel_message_id]
+                        send_message(chat_id, "✅ File deleted successfully!")
+                    else:
+                        send_message(chat_id, "❌ Deletion failed")
                 else:
-                    send_message(chat_id, "❌ Deletion failed")
-            else:
-                send_message(chat_id, "⚠️ No permission or file not found")
+                    send_message(chat_id, "⚠️ No permission or file not found")
+            except (IndexError, ValueError) as e:
+                logger.error(f"Invalid callback data: {callback_data}, error: {str(e)}")
+                send_message(chat_id, "❌ Invalid request")
         
         elif callback_data in handlers:
             text, markup = handlers[callback_data]
@@ -235,6 +251,11 @@ def webhook():
             break
 
     if file_id:
+        if file_type not in file_types:
+            send_message(chat_id, "❌ Unsupported file type", {
+                "inline_keyboard": [[{"text": "📖 Learn How", "callback_data": "show_upload"}]]
+            })
+            return jsonify({"status": "processed"}), 200
         result = send_file_to_channel(file_id, file_type)
         if result and result.get("ok"):
             channel_message_id = result["result"]["message_id"]
@@ -265,6 +286,7 @@ def webhook():
                         f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M')}",
                         reply_markup)
         else:
+            logger.error(f"File upload failed: {result}")
             send_message(chat_id, "❌ Upload failed", {
                 "inline_keyboard": [[{"text": "🔄 Retry", "callback_data": "show_upload"}]]
             })
