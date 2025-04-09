@@ -829,8 +829,277 @@ def index():
     
     <footer>
         <div class="container">
-            <p>&copy; 2023 File Uploader Bot. All rights reserved.</p>
+            <p>&copy; 2025 File Uploader Bot. All rights reserved.</p>
             <p>Enterprise-grade file management solution</p>
+        </div>
+    </footer>
+</body>
+</html>
+"""
+# Add this new route to your Flask app
+@app.route('/privacy', methods=['GET'])
+def privacy_policy():
+    return """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - File Uploader Bot</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4361ee;
+            --secondary: #3f37c9;
+            --dark: #1b263b;
+            --light: #f8f9fa;
+            --gray: #6c757d;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Roboto', sans-serif;
+            line-height: 1.6;
+            color: var(--dark);
+            background-color: #f5f7fa;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+        
+        header {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 2rem 0;
+            text-align: center;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+        
+        .last-updated {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            margin-bottom: 1rem;
+        }
+        
+        .policy-section {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .section-title {
+            font-size: 1.5rem;
+            color: var(--primary);
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        
+        .section-content {
+            margin-bottom: 1.5rem;
+        }
+        
+        .section-content p {
+            margin-bottom: 1rem;
+        }
+        
+        .section-content ul {
+            margin-bottom: 1rem;
+            padding-left: 1.5rem;
+        }
+        
+        .section-content li {
+            margin-bottom: 0.5rem;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background-color: var(--primary);
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin-top: 1rem;
+        }
+        
+        .btn:hover {
+            background-color: var(--secondary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        footer {
+            text-align: center;
+            padding: 2rem 0;
+            margin-top: 2rem;
+            color: var(--gray);
+            font-size: 0.9rem;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .policy-section {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Privacy Policy</h1>
+            <p class="last-updated">Last Updated: 2025</p>
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="policy-section">
+            <h2 class="section-title">1. Introduction</h2>
+            <div class="section-content">
+                <p>This Privacy Policy explains how File Uploader Bot ("we", "our", or "us") collects, uses, and discloses your information when you use our Telegram bot service.</p>
+                <p>By using our bot, you agree to the collection and use of information in accordance with this policy.</p>
+            </div>
+        </div>
+        
+        <div class="policy-section">
+            <h2 class="section-title">2. Information We Collect</h2>
+            <div class="section-content">
+                <p>When you use our bot, we may collect the following information:</p>
+                <ul>
+                    <li><strong>Basic User Information:</strong> Your Telegram user ID, username, first name, and last name</li>
+                    <li><strong>File Metadata:</strong> Information about files you upload including file type, size, and upload timestamp</li>
+                    <li><strong>Interaction Data:</strong> Commands you send to the bot and your interactions with our interface</li>
+                    <li><strong>Technical Information:</strong> Device information, IP address (for web interface), and usage statistics</li>
+                </ul>
+                <p><strong>Note:</strong> We do not store the actual content of files you upload beyond what is necessary to provide the service.</p>
+            </div>
+        </div>
+        
+        <div class="policy-section">
+            <h2 class="section-title">3. How We Use Your Information</h2>
+            <div class="section-content">
+                <p>We use the collected information for the following purposes:</p>
+                <ul>
+                    <li>To provide and maintain our service</li>
+                    <li>To notify you about changes to our service</li>
+                    <li>To allow you to participate in interactive features of our service</li>
+                    <li>To provide customer support</li>
+                    <li>To gather analysis or valuable information so that we can improve our service</li>
+                    <li>To monitor the usage of our service</li>
+                    <li>To detect, prevent and address technical issues</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="policy-section">
+            <h2 class="section-title">4. Data Retention</h2>
+            <div class="section-content">
+                <p>We retain collected information only for as long as necessary to provide you with our services:</p>
+                <ul>
+                    <li>File metadata is retained for 30 days after file deletion</li>
+                    <li>User information is retained while your account is active and for 90 days after</li>
+                    <li>Usage statistics may be retained indefinitely in anonymized form</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="policy-section">
+            <h2 class="section-title">5. Data Security</h2>
+            <div class="section-content">
+                <p>We implement appropriate technical and organizational measures to protect your personal data:</p>
+                <ul>
+                    <li>All data transmissions are encrypted using SSL/TLS</li>
+                    <li>Access to user data is restricted to authorized personnel only</li>
+                    <li>Regular security audits of our infrastructure</li>
+                    <li>Secure storage solutions with access controls</li>
+                </ul>
+                <p>However, no method of transmission over the Internet or method of electronic storage is 100% secure.</p>
+            </div>
+        </div>
+        
+        <div class="policy-section">
+            <h2 class="section-title">6. Third-Party Services</h2>
+            <div class="section-content">
+                <p>We may employ third-party companies and individuals to facilitate our service ("Service Providers"), to provide the service on our behalf, or to assist us in analyzing how our service is used.</p>
+                <p>These third parties have access to your information only to perform these tasks on our behalf and are obligated not to disclose or use it for any other purpose.</p>
+                <p>Current Service Providers include:</p>
+                <ul>
+                    <li>Telegram Messenger for bot platform services</li>
+                    <li>Vercel for hosting our web interface</li>
+                    <li>Google Analytics for anonymous usage statistics</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="policy-section">
+            <h2 class="section-title">7. Your Data Rights</h2>
+            <div class="section-content">
+                <p>You have the right to:</p>
+                <ul>
+                    <li>Access the personal data we hold about you</li>
+                    <li>Request correction of inaccurate personal data</li>
+                    <li>Request deletion of your personal data</li>
+                    <li>Object to processing of your personal data</li>
+                    <li>Request restriction of processing your personal data</li>
+                    <li>Request transfer of your personal data</li>
+                    <li>Withdraw your consent</li>
+                </ul>
+                <p>To exercise any of these rights, please contact us at @YourSupportChannel on Telegram.</p>
+            </div>
+        </div>
+        
+        <div class="policy-section">
+            <h2 class="section-title">8. Changes to This Policy</h2>
+            <div class="section-content">
+                <p>We may update our Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page.</p>
+                <p>You are advised to review this Privacy Policy periodically for any changes. Changes to this Privacy Policy are effective when they are posted on this page.</p>
+            </div>
+        </div>
+        
+        <div class="policy-section">
+            <h2 class="section-title">9. Contact Us</h2>
+            <div class="section-content">
+                <p>If you have any questions about this Privacy Policy, please contact us:</p>
+                <ul>
+                    <li>Via Telegram: @MAXWARORG</li>
+                    <li>Via email: hojievmakhmud@gmail.com</li>
+                </ul>
+                <a href="https://t.me/IP_AdressBot" class="btn">Back to Bot</a>
+            </div>
+        </div>
+    </div>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 File Uploader Bot. All rights reserved.</p>
         </div>
     </footer>
 </body>
