@@ -1105,7 +1105,7 @@ PRIVACY_HTML = """
         <ul style="list-style-type: none; padding-left: 1rem; margin-bottom: 1.5rem;">
             <li><i class="fas fa-telegram" style="color: var(--highlight-color); margin-right: 10px;"></i> Telegram: <a href="https://t.me/MAXWARORG">@MAXWARORG</a></li>
             <li><i class="fas fa-globe" style="color: var(--highlight-color); margin-right: 10px;"></i> Website: <a href="/">Telegram File Uploader Bot</a></li>
-            <li><i class="fas fa-phone-alt" style="color: var(--highlight-color); margin-right: 10px;"></i> Email: support@fileuploaderbot.com (coming soon)</li>
+            <li><i class="fas fa-phone-alt" style="color: var(--highlight-color); margin-right: 10px;"></i> Email: hojievmakhmud@gmail.com</li>
         </ul>
 
         <a href="/" class="back-btn">Return to Home</a>
