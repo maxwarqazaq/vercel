@@ -731,49 +731,399 @@ PRIVACY_HTML = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Privacy Policy</title>
+    <title>Privacy Policy - Telegram File Uploader Bot</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        body { background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); font-family: 'Poppins', sans-serif; padding: 2rem; }
-        .container { max-width: 800px; margin: 0 auto; background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
-        h1 { color: #4361ee; margin-bottom: 1rem; }
-        p { line-height: 1.6; color: #2b2d42; margin-bottom: 1rem; opacity: 0.9; }
-        a { color: #4361ee; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-        .back-btn { display: inline-block; padding: 0.8rem 1.5rem; background: #4361ee; color: white; border-radius: 50px; text-decoration: none; margin-top: 2rem; }
+        :root {
+            --primary-color: #1a73e8; /* Professional blue */
+            --secondary-color: #f8faf9; /* Very light gray background */
+            --text-color: #202124; /* Dark text for readability */
+            --accent-color: #34a853; /* Green accent for trust */
+            --error-color: #ea4335; /* Red for warnings */
+            --success-color: #34a853; /* Green for positive actions */
+            --border-color: #e0e0e0; /* Light border */
+            --shadow-color: rgba(0, 0, 0, 0.1); /* Subtle shadow */
+            --highlight-color: #fbbc05; /* Yellow for emphasis */
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background: linear-gradient(135deg, #e3f2fd 0%, #f5f7fa 100%);
+            padding: 2rem 0;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 4rem 5rem;
+            border-radius: 25px;
+            box-shadow: 0 15px 40px var(--shadow-color);
+            border: 2px solid var(--border-color);
+            position: relative;
+            animation: fadeIn 1s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+            position: relative;
+        }
+
+        header::after {
+            content: '';
+            position: absolute;
+            bottom: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50px;
+            height: 3px;
+            background: var(--primary-color);
+            border-radius: 2px;
+        }
+
+        h1 {
+            color: var(--primary-color);
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            letter-spacing: -0.5px;
+            text-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        h2 {
+            color: var(--primary-color);
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin: 2.5rem 0 1.5rem;
+            border-bottom: 3px solid var(--border-color);
+            padding-bottom: 0.7rem;
+            transition: transform 0.3s ease;
+        }
+
+        h2:hover {
+            transform: translateX(10px);
+        }
+
+        p {
+            margin-bottom: 1.5rem;
+            color: #333;
+            font-size: 1.1rem;
+            line-height: 1.8;
+            opacity: 0.95;
+            transition: opacity 0.3s ease;
+        }
+
+        p:hover {
+            opacity: 1;
+        }
+
+        a {
+            color: var(--primary-color);
+            text-decoration: none;
+            transition: color 0.3s ease, text-decoration 0.3s ease;
+            position: relative;
+        }
+
+        a::after {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 2px;
+            bottom: -4px;
+            left: 0;
+            background: var(--accent-color);
+            transition: width 0.3s ease;
+        }
+
+        a:hover::after {
+            width: 100%;
+            text-decoration: underline;
+        }
+
+        .policy-section {
+            background: var(--secondary-color);
+            padding: 2rem;
+            border-radius: 15px;
+            margin-bottom: 2.5rem;
+            border-left: 5px solid var(--primary-color);
+            box-shadow: 0 5px 15px var(--shadow-color);
+            animation: slideUp 0.8s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .icon {
+            margin-right: 10px;
+            color: var(--primary-color);
+        }
+
+        .key-points {
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            box-shadow: 0 5px 15px var(--shadow-color);
+        }
+
+        .key-points table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        .key-points th, .key-points td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .key-points th {
+            background: var(--primary-color);
+            color: white;
+            font-weight: 600;
+        }
+
+        .key-points td {
+            background: var(--secondary-color);
+        }
+
+        .back-btn {
+            display: inline-block;
+            padding: 1rem 2rem;
+            background: linear-gradient(45deg, var(--primary-color), var(--accent-color));
+            color: white;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.4s ease;
+            box-shadow: 0 8px 25px var(--shadow-color);
+            margin-top: 2.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .back-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 35px var(--shadow-color);
+            background: linear-gradient(45deg, var(--accent-color), var(--primary-color));
+        }
+
+        .back-btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .back-btn:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 2.5rem 2rem;
+                margin: 0 1rem;
+            }
+
+            h1 {
+                font-size: 2.2rem;
+            }
+
+            h2 {
+                font-size: 1.4rem;
+            }
+
+            p {
+                font-size: 1rem;
+            }
+
+            .policy-section, .key-points {
+                padding: 1.5rem;
+            }
+
+            .back-btn {
+                padding: 0.8rem 1.5rem;
+                font-size: 0.9rem;
+            }
+
+            .key-points table {
+                font-size: 0.9rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 2rem 1.5rem;
+            }
+
+            h1 {
+                font-size: 1.8rem;
+            }
+
+            h2 {
+                font-size: 1.2rem;
+            }
+
+            .policy-section {
+                padding: 1rem;
+            }
+
+            .key-points {
+                padding: 1rem;
+            }
+
+            .back-btn {
+                padding: 0.7rem 1.2rem;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Privacy Policy</h1>
-        <p>We are committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your information when you use our Telegram File Uploader Bot and website.</p>
+        <header>
+            <h1>Privacy Policy</h1>
+            <p>Ensuring your privacy and data security is our top priority. Read on to understand how we protect your information.</p>
+        </header>
 
-        <h2>1. Data Collection</h2>
-        <p>We collect only the data necessary for providing our services, including your Telegram ID, username, and file metadata (e.g., file type, size, and upload time) when you interact with the bot. If you choose to log in via Telegram on our website, we may also store your user ID and name for authentication purposes.</p>
+        <div class="policy-section">
+            <p><i class="fas fa-lock icon"></i> At Telegram File Uploader Bot, we are dedicated to safeguarding your privacy. This comprehensive Privacy Policy outlines how we collect, use, store, and protect your personal data when you interact with our bot and website, ensuring transparency and trust.</p>
+        </div>
 
-        <h2>2. Data Usage</h2>
-        <p>Your data is used exclusively to facilitate file uploads, provide shareable links, manage your interactions with the bot, and (if logged in) access additional website features. We do not share your data with third parties unless required by law or with your explicit consent.</p>
+        <h2>1. Data We Collect</h2>
+        <p><i class="fas fa-database icon"></i> We only collect essential information to provide our services effectively:</p>
+        <ul style="list-style-type: none; padding-left: 1rem; margin-bottom: 1.5rem;">
+            <li><i class="fas fa-check-circle" style="color: var(--success-color); margin-right: 10px;"></i> Telegram ID and Username</li>
+            <li><i class="fas fa-check-circle" style="color: var(--success-color); margin-right: 10px;"></i> File Metadata (type, size, upload time)</li>
+            <li><i class="fas fa-check-circle" style="color: var(--success-color); margin-right: 10px;"></i> Optional: User ID and Name for website login via Telegram</li>
+        </ul>
 
-        <h2>3. Data Storage</h2>
-        <p>Files and user data are stored temporarily on our servers and can be deleted at your request or automatically after a set period (e.g., 30 days). You can request deletion at any time by contacting us or using the delete function in the bot. Website login data is stored in session cookies and cleared when you log out or the session expires.</p>
+        <h2>2. How We Use Your Data</h2>
+        <p><i class="fas fa-cog icon"></i> Your data is used solely for the following purposes:</p>
+        <ul style="list-style-type: none; padding-left: 1rem; margin-bottom: 1.5rem;">
+            <li><i class="fas fa-upload" style="color: var(--accent-color); margin-right: 10px;"></i> Facilitating file uploads to our Telegram channel</li>
+            <li><i class="fas fa-link" style="color: var(--accent-color); margin-right: 10px;"></i> Generating and sharing direct links to your files</li>
+            <li><i class="fas fa-user-shield" style="color: var(--accent-color); margin-right: 10px;"></i> Managing your interactions and ensuring service functionality</li>
+            <li><i class="fas fa-key" style="color: var(--accent-color); margin-right: 10px;"></i> Authenticating users for website features (if logged in)</li>
+        </ul>
+        <p>We never share your data with third parties except as required by law or with your explicit consent.</p>
+
+        <h2>3. Data Storage and Retention</h2>
+        <p><i class="fas fa-server icon"></i> Your data is stored securely and temporarily:</p>
+        <ul style="list-style-type: none; padding-left: 1rem; margin-bottom: 1.5rem;">
+            <li><i class="fas fa-clock" style="color: var(--highlight-color); margin-right: 10px;"></i> Files and metadata are retained for up to 30 days or until you request deletion</li>
+            <li><i class="fas fa-trash" style="color: var(--error-color); margin-right: 10px;"></i> You can delete your files anytime via the bot or by contacting us</li>
+            <li><i class="fas fa-cookie-bite" style="color: var(--highlight-color); margin-right: 10px;"></i> Website login data is stored in session cookies and cleared upon logout or session expiration</li>
+        </ul>
+
+        <div class="key-points">
+            <h3>Key Privacy Points at a Glance</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Aspect</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Data Collection</td>
+                        <td>Minimal and necessary for service functionality</td>
+                    </tr>
+                    <tr>
+                        <td>Data Sharing</td>
+                        <td>Never shared unless legally required</td>
+                    </tr>
+                    <tr>
+                        <td>Retention Period</td>
+                        <td>Up to 30 days or until deletion</td>
+                    </tr>
+                    <tr>
+                        <td>Your Rights</td>
+                        <td>Access, correct, or delete your data anytime</td>
+                    </tr>
+                    <tr>
+                        <td>Security Measures</td>
+                        <td>Advanced encryption and secure storage</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
 
         <h2>4. Your Rights</h2>
-        <p>You have the right to access, correct, or delete your personal data. If you have concerns or questions about your data, please contact our admin at @AdminUsername.</p>
+        <p><i class="fas fa-user-check icon"></i> You have full control over your data:</p>
+        <ul style="list-style-type: none; padding-left: 1rem; margin-bottom: 1.5rem;">
+            <li><i class="fas fa-eye" style="color: var(--success-color); margin-right: 10px;"></i> Right to access your stored data</li>
+            <li><i class="fas fa-edit" style="color: var(--success-color); margin-right: 10px;"></i> Right to correct inaccuracies</li>
+            <li><i class="fas fa-trash-alt" style="color: var(--success-color); margin-right: 10px;"></i> Right to request deletion at any time</li>
+        </ul>
+        <p>For assistance, contact our admin at <a href="https://t.me/AdminUsername">@AdminUsername</a>.</p>
 
-        <h2>5. Security</h2>
-        <p>We implement reasonable security measures to protect your data from unauthorized access, alteration, or disclosure. However, no method of transmission over the Internet or electronic storage is 100% secure, and we cannot guarantee absolute security.</p>
+        <h2>5. Security Measures</h2>
+        <p><i class="fas fa-shield-alt icon"></i> We prioritize your data security with:</p>
+        <ul style="list-style-type: none; padding-left: 1rem; margin-bottom: 1.5rem;">
+            <li><i class="fas fa-lock" style="color: var(--success-color); margin-right: 10px;"></i> End-to-end encryption for data transmission</li>
+            <li><i class="fas fa-server" style="color: var(--success-color); margin-right: 10px;"></i> Secure server infrastructure</li>
+            <li><i class="fas fa-user-secret" style="color: var(--success-color); margin-right: 10px;"></i> Regular security audits and updates</li>
+        </ul>
+        <p>While we strive for maximum security, no system is entirely immune to all risks.</p>
 
         <h2>6. Third-Party Services</h2>
-        <p>Our bot and website use Telegram's API and infrastructure. Their privacy policies also apply to any data processed through their services.</p>
+        <p><i class="fas fa-handshake icon"></i> Our services rely on Telegram’s API and infrastructure. Their <a href="https://telegram.org/privacy" target="_blank">Privacy Policy</a> also applies to data processed through their platform. We ensure compliance with their standards and ours.</p>
 
-        <h2>7. Changes to This Policy</h2>
-        <p>We may update this Privacy Policy from time to time. Any changes will be posted here, and we encourage you to review this policy periodically.</p>
+        <h2>7. Policy Updates</h2>
+        <p><i class="fas fa-refresh icon"></i> We may update this policy to reflect changes in our practices or legal requirements. Any updates will be posted here, and we recommend reviewing this page periodically. You’ll be notified of significant changes via the bot or website.</p>
 
         <h2>8. Contact Us</h2>
-        <p>If you have any questions or concerns about this Privacy Policy, please contact us at @AdminUsername or via our website.</p>
+        <p><i class="fas fa-envelope icon"></i> If you have questions, concerns, or need assistance regarding your privacy, please reach out:</p>
+        <ul style="list-style-type: none; padding-left: 1rem; margin-bottom: 1.5rem;">
+            <li><i class="fas fa-telegram" style="color: var(--highlight-color); margin-right: 10px;"></i> Telegram: <a href="https://t.me/AdminUsername">@AdminUsername</a></li>
+            <li><i class="fas fa-globe" style="color: var(--highlight-color); margin-right: 10px;"></i> Website: <a href="/">Telegram File Uploader Bot</a></li>
+            <li><i class="fas fa-phone-alt" style="color: var(--highlight-color); margin-right: 10px;"></i> Email: support@fileuploaderbot.com (coming soon)</li>
+        </ul>
 
-        <a href="/" class="back-btn">Back to Home</a>
+        <a href="/" class="back-btn">Return to Home</a>
     </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const headers = document.querySelectorAll('h2');
+            headers.forEach(header => {
+                header.addEventListener('mouseover', () => {
+                    header.style.color = var(--accent-color);
+                });
+                header.addEventListener('mouseout', () => {
+                    header.style.color = var(--primary-color);
+                });
+            });
+        });
+    </script>
 </body>
 </html>
 """
