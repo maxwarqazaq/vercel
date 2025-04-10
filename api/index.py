@@ -1,10 +1,13 @@
 import os
 import requests
-from flask import Flask, Response, request, jsonify, render_template_string
+import hmac
+import hashlib
+from flask import Flask, Response, request, jsonify, render_template_string, session, redirect, url_for
 from datetime import datetime, timedelta
 import time
 import threading
 import logging
+from functools import wraps
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -12,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 # Flask application
 app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY', 'your-secret-key-here')  # For sessions
 
 # Bot configuration
 TOKEN = os.getenv('TOKEN')
@@ -24,11 +28,20 @@ MAX_FILE_SIZE_MB = 50  # Maximum file size in MB
 RATE_LIMIT = 3  # Files per minute per user
 BOT_USERNAME = "IP_AdressBot"  # Your bot's username
 
-# User data and file storage
+# User data and file storage (in memory for simplicity; use a database in production)
 uploaded_files = {}
 user_activity = {}
+users = {}
 
-# Helper functions (same as before, only including necessary ones for brevity)
+# Helper functions
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('home'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 def create_inline_keyboard(buttons, columns=2):
     keyboard = []
     row = []
@@ -40,6 +53,19 @@ def create_inline_keyboard(buttons, columns=2):
     if row:
         keyboard.append(row)
     return {"inline_keyboard": keyboard}
+
+def create_reply_keyboard(buttons, resize=True, one_time=False):
+    keyboard = []
+    row = []
+    for button in buttons:
+        row.append({"text": button})
+    keyboard.append(row)
+    return {
+        "keyboard": keyboard,
+        "resize_keyboard": resize,
+        "one_time_keyboard": one_time,
+        "selective": True
+    }
 
 def send_message(chat_id, text, reply_markup=None, disable_web_page_preview=True):
     try:
@@ -78,9 +104,17 @@ def edit_message_text(chat_id, message_id, text, reply_markup=None):
         return None
 
 def send_file_to_channel(file_id, file_type, caption=None, chat_id=CHANNEL_USERNAME):
-    methods = {"document": ("sendDocument", "document"), "photo": ("sendPhoto", "photo"), "video": ("sendVideo", "video"), "audio": ("sendAudio", "audio"), "voice": ("sendVoice", "voice")}
+    methods = {
+        "document": ("sendDocument", "document"),
+        "photo": ("sendPhoto", "photo"),
+        "video": ("sendVideo", "video"),
+        "audio": ("sendAudio", "audio"),
+        "voice": ("sendVoice", "voice")
+    }
+    
     if file_type not in methods:
         return None
+
     method, payload_key = methods[file_type]
     url = f"{BASE_API_URL}/{method}"
     payload = {"chat_id": chat_id, payload_key: file_id}
@@ -111,11 +145,20 @@ def send_typing_action(chat_id):
     requests.post(url, json=payload, timeout=30)
 
 def create_file_info_message(file_data, channel_url):
-    file_type_emoji = {"document": "📄", "photo": "🖼️", "video": "🎬", "audio": "🎵", "voice": "🎤"}.get(file_data["file_type"], "📁")
+    file_type_emoji = {
+        "document": "📄",
+        "photo": "🖼️",
+        "video": "🎬",
+        "audio": "🎵",
+        "voice": "🎤"
+    }.get(file_data["file_type"], "📁")
+    
     user_info = get_user_info(file_data["user_id"])
     username = user_info.get("username", "Unknown")
     first_name = user_info.get("first_name", "User")
+    
     upload_time = datetime.fromtimestamp(file_data["timestamp"]).strftime('%Y-%m-%d %H:%M:%S')
+    
     return f"""
 {file_type_emoji} <b>File Successfully Uploaded!</b>
 
@@ -132,9 +175,12 @@ def check_rate_limit(user_id):
     now = time.time()
     if user_id not in user_activity:
         user_activity[user_id] = []
+    
     user_activity[user_id] = [t for t in user_activity[user_id] if now - t < 60]
+    
     if len(user_activity[user_id]) >= RATE_LIMIT:
         return False
+    
     user_activity[user_id].append(now)
     return True
 
@@ -170,7 +216,7 @@ def handle_callback_query(callback):
     if callback_data.startswith("delete_"):
         channel_message_id = int(callback_data.split("_")[1])
         handle_delete(chat_id, message_id, user_id, channel_message_id)
-    elif callback_data in ["help", "upload_instructions", "main_menu", "admin_panel", "admin_stats", "admin_list", "admin_restart", "privacy"]:
+    elif callback_data in ["help", "upload_instructions", "main_menu", "admin_panel", "admin_stats", "admin_list", "admin_users", "admin_restart", "privacy"]:
         handle_menu_action(chat_id, message_id, user_id, callback_data)
 
 def handle_message(message):
@@ -486,6 +532,7 @@ def handle_menu_action(chat_id, message_id, user_id, action):
     elif action == "admin_list" and user_id in ADMIN_IDS:
         list_files(chat_id, user_id)
 
+# Background task
 def clean_activity_data():
     while True:
         now = time.time()
@@ -501,12 +548,32 @@ cleaner_thread.start()
 # Web Routes
 @app.route('/', methods=['GET'])
 def home():
-    return render_template_string(HOME_HTML, bot_username=BOT_USERNAME)
+    return render_template_string(HOME_HTML, bot_username=BOT_USERNAME, privacy_policy_url='/privacy')
 
 @app.route('/privacy', methods=['GET'])
 def privacy_policy():
     return render_template_string(PRIVACY_HTML)
 
+@app.route('/admin', methods=['GET'])
+@login_required
+def admin_panel():
+    user_id = session.get('user_id')
+    if user_id not in ADMIN_IDS:
+        return "Access denied", 403
+    return render_template_string(ADMIN_HTML, uploaded_files=uploaded_files, CHANNEL_USERNAME=CHANNEL_USERNAME)
+
+@app.route('/delete_file/<int:msg_id>', methods=['POST'])
+@login_required
+def delete_file(msg_id):
+    user_id = session.get('user_id')
+    if user_id not in ADMIN_IDS:
+        return jsonify({"status": "error", "message": "Access denied"}), 403
+    if msg_id in uploaded_files and delete_message(CHANNEL_USERNAME, msg_id):
+        del uploaded_files[msg_id]
+        return jsonify({"status": "success", "message": "File deleted"}), 200
+    return jsonify({"status": "error", "message": "File not found or deletion failed"}), 404
+
+# HTML Templates as Strings
 HOME_HTML = """
 <!DOCTYPE html>
 <html lang="en">
@@ -575,11 +642,10 @@ HOME_HTML = """
         <div class="btn-group">
             <a href="https://t.me/{{ bot_username }}" class="btn">Start the Bot</a>
             <a href="/setwebhook" class="btn btn-outline">Set Webhook</a>
-            <a href="/privacy" class="btn btn-outline">Privacy Policy</a>
         </div>
         
         <footer>
-            <p>© 2025 Telegram File Uploader Bot. All rights reserved. <a href="/privacy">Privacy Policy</a></p>
+            <p>© 2025 Telegram File Uploader Bot. All rights reserved. <a href="{{ privacy_policy_url }}">Privacy Policy</a></p>
         </footer>
     </div>
 </body>
@@ -594,20 +660,25 @@ PRIVACY_HTML = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Privacy Policy - Telegram File Uploader Bot</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         :root {
-            --primary-color: #1a73e8;
-            --secondary-color: #f8faf9;
-            --text-color: #202124;
-            --accent-color: #34a853;
-            --error-color: #ea4335;
-            --success-color: #34a853;
-            --border-color: #e0e0e0;
-            --shadow-color: rgba(0, 0, 0, 0.1);
-            --highlight-color: #fbbc05;
+            --primary-color: #1a73e8; /* Professional blue */
+            --secondary-color: #f8faf9; /* Very light gray background */
+            --text-color: #202124; /* Dark text for readability */
+            --accent-color: #34a853; /* Green accent for trust */
+            --error-color: #ea4335; /* Red for warnings */
+            --success-color: #34a853; /* Green for positive actions */
+            --border-color: #e0e0e0; /* Light border */
+            --shadow-color: rgba(0, 0, 0, 0.1); /* Subtle shadow */
+            --highlight-color: #fbbc05; /* Yellow for emphasis */
         }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
         body {
             font-family: 'Poppins', sans-serif;
@@ -626,12 +697,20 @@ PRIVACY_HTML = """
             border-radius: 25px;
             box-shadow: 0 15px 40px var(--shadow-color);
             border: 2px solid var(--border-color);
+            position: relative;
             animation: fadeIn 1s ease-in;
         }
 
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
 
-        header { text-align: center; margin-bottom: 3rem; }
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+            position: relative;
+        }
 
         header::after {
             content: '';
@@ -645,33 +724,212 @@ PRIVACY_HTML = """
             border-radius: 2px;
         }
 
-        h1 { color: var(--primary-color); font-size: 3rem; font-weight: 700; margin-bottom: 1.5rem; letter-spacing: -0.5px; text-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); }
+        h1 {
+            color: var(--primary-color);
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            letter-spacing: -0.5px;
+            text-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
 
-        h2 { color: var(--primary-color); font-size: 1.8rem; font-weight: 600; margin: 2.5rem 0 1.5rem; border-bottom: 3px solid var(--border-color); padding-bottom: 0.7rem; transition: transform 0.3s ease; }
+        h2 {
+            color: var(--primary-color);
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin: 2.5rem 0 1.5rem;
+            border-bottom: 3px solid var(--border-color);
+            padding-bottom: 0.7rem;
+            transition: transform 0.3s ease;
+        }
 
-        h2:hover { transform: translateX(10px); }
+        h2:hover {
+            transform: translateX(10px);
+        }
 
-        p { margin-bottom: 1.5rem; color: #333; font-size: 1.1rem; line-height: 1.8; opacity: 0.95; transition: opacity 0.3s ease; }
+        p {
+            margin-bottom: 1.5rem;
+            color: #333;
+            font-size: 1.1rem;
+            line-height: 1.8;
+            opacity: 0.95;
+            transition: opacity 0.3s ease;
+        }
 
-        p:hover { opacity: 1; }
+        p:hover {
+            opacity: 1;
+        }
 
-        a { color: var(--primary-color); text-decoration: none; transition: color 0.3s ease, text-decoration 0.3s ease; position: relative; }
+        a {
+            color: var(--primary-color);
+            text-decoration: none;
+            transition: color 0.3s ease, text-decoration 0.3s ease;
+            position: relative;
+        }
 
-        a::after { content: ''; position: absolute; width: 0; height: 2px; bottom: -4px; left: 0; background: var(--accent-color); transition: width 0.3s ease; }
+        a::after {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 2px;
+            bottom: -4px;
+            left: 0;
+            background: var(--accent-color);
+            transition: width 0.3s ease;
+        }
 
-        a:hover::after { width: 100%; text-decoration: underline; }
+        a:hover::after {
+            width: 100%;
+            text-decoration: underline;
+        }
 
-        .policy-section { background: var(--secondary-color); padding: 2rem; border-radius: 15px; margin-bottom: 2.5rem; border-left: 5px solid var(--primary-color); box-shadow: 0 5px 15px var(--shadow-color); animation: slideUp 0.8s ease-out; }
+        .policy-section {
+            background: var(--secondary-color);
+            padding: 2rem;
+            border-radius: 15px;
+            margin-bottom: 2.5rem;
+            border-left: 5px solid var(--primary-color);
+            box-shadow: 0 5px 15px var(--shadow-color);
+            animation: slideUp 0.8s ease-out;
+        }
 
-        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
 
-        .back-btn { display: inline-block; padding: 1rem 2rem; background: linear-gradient(45deg, var(--primary-color), var(--accent-color)); color: white; border-radius: 50px; text-decoration: none; font-weight: 600; transition: all 0.4s ease; box-shadow: 0 8px 25px var(--shadow-color); margin-top: 2.5rem; }
+        .icon {
+            margin-right: 10px;
+            color: var(--primary-color);
+        }
 
-        .back-btn:hover { transform: translateY(-3px); box-shadow: 0 12px 35px var(--shadow-color); background: linear-gradient(45deg, var(--accent-color), var(--primary-color)); }
+        .key-points {
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            box-shadow: 0 5px 15px var(--shadow-color);
+        }
 
-        @media (max-width: 768px) { .container { padding: 2.5rem 2rem; margin: 0 1rem; } h1 { font-size: 2.2rem; } h2 { font-size: 1.4rem; } p { font-size: 1rem; } .policy-section { padding: 1.5rem; } .back-btn { padding: 0.8rem 1.5rem; font-size: 0.9rem; } }
+        .key-points table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
 
-        @media (max-width: 480px) { .container { padding: 2rem 1.5rem; } h1 { font-size: 1.8rem; } h2 { font-size: 1.2rem; } .policy-section { padding: 1rem; } .back-btn { padding: 0.7rem 1.2rem; } }
+        .key-points th, .key-points td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .key-points th {
+            background: var(--primary-color);
+            color: white;
+            font-weight: 600;
+        }
+
+        .key-points td {
+            background: var(--secondary-color);
+        }
+
+        .back-btn {
+            display: inline-block;
+            padding: 1rem 2rem;
+            background: linear-gradient(45deg, var(--primary-color), var(--accent-color));
+            color: white;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.4s ease;
+            box-shadow: 0 8px 25px var(--shadow-color);
+            margin-top: 2.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .back-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 35px var(--shadow-color);
+            background: linear-gradient(45deg, var(--accent-color), var(--primary-color));
+        }
+
+        .back-btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .back-btn:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 2.5rem 2rem;
+                margin: 0 1rem;
+            }
+
+            h1 {
+                font-size: 2.2rem;
+            }
+
+            h2 {
+                font-size: 1.4rem;
+            }
+
+            p {
+                font-size: 1rem;
+            }
+
+            .policy-section, .key-points {
+                padding: 1.5rem;
+            }
+
+            .back-btn {
+                padding: 0.8rem 1.5rem;
+                font-size: 0.9rem;
+            }
+
+            .key-points table {
+                font-size: 0.9rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 2rem 1.5rem;
+            }
+
+            h1 {
+                font-size: 1.8rem;
+            }
+
+            h2 {
+                font-size: 1.2rem;
+            }
+
+            .policy-section {
+                padding: 1rem;
+            }
+
+            .key-points {
+                padding: 1rem;
+            }
+
+            .back-btn {
+                padding: 0.7rem 1.2rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -682,50 +940,174 @@ PRIVACY_HTML = """
         </header>
 
         <div class="policy-section">
-            <p>At Telegram File Uploader Bot, we are dedicated to safeguarding your privacy. This comprehensive Privacy Policy outlines how we collect, use, store, and protect your personal data when you interact with our bot and website, ensuring transparency and trust.</p>
+            <p><i class="fas fa-lock icon"></i> At Telegram File Uploader Bot, we are dedicated to safeguarding your privacy. This comprehensive Privacy Policy outlines how we collect, use, store, and protect your personal data when you interact with our bot and website, ensuring transparency and trust.</p>
         </div>
 
         <h2>1. Data We Collect</h2>
-        <p>We only collect essential information to provide our services effectively:</p>
+        <p><i class="fas fa-database icon"></i> We only collect essential information to provide our services effectively:</p>
         <ul style="list-style-type: none; padding-left: 1rem; margin-bottom: 1.5rem;">
-            <li>Telegram ID and Username</li>
-            <li>File Metadata (type, size, upload time)</li>
+            <li><i class="fas fa-check-circle" style="color: var(--success-color); margin-right: 10px;"></i> Telegram ID and Username</li>
+            <li><i class="fas fa-check-circle" style="color: var(--success-color); margin-right: 10px;"></i> File Metadata (type, size, upload time)</li>
         </ul>
 
         <h2>2. How We Use Your Data</h2>
-        <p>Your data is used solely for the following purposes:</p>
+        <p><i class="fas fa-cog icon"></i> Your data is used solely for the following purposes:</p>
         <ul style="list-style-type: none; padding-left: 1rem; margin-bottom: 1.5rem;">
-            <li>Facilitating file uploads to our Telegram channel</li>
-            <li>Generating and sharing direct links to your files</li>
-            <li>Managing your interactions and ensuring service functionality</li>
+            <li><i class="fas fa-upload" style="color: var(--accent-color); margin-right: 10px;"></i> Facilitating file uploads to our Telegram channel</li>
+            <li><i class="fas fa-link" style="color: var(--accent-color); margin-right: 10px;"></i> Generating and sharing direct links to your files</li>
+            <li><i class="fas fa-user-shield" style="color: var(--accent-color); margin-right: 10px;"></i> Managing your interactions and ensuring service functionality</li>
         </ul>
         <p>We never share your data with third parties except as required by law or with your explicit consent.</p>
 
         <h2>3. Data Storage and Retention</h2>
-        <p>Your data is stored securely and temporarily:</p>
+        <p><i class="fas fa-server icon"></i> Your data is stored securely and temporarily:</p>
         <ul style="list-style-type: none; padding-left: 1rem; margin-bottom: 1.5rem;">
-            <li>Files and metadata are retained for up to 30 days or until you request deletion</li>
-            <li>You can delete your files anytime via the bot or by contacting us</li>
+            <li><i class="fas fa-clock" style="color: var(--highlight-color); margin-right: 10px;"></i> Files and metadata are retained for up to 30 days or until you request deletion</li>
+            <li><i class="fas fa-trash" style="color: var(--error-color); margin-right: 10px;"></i> You can delete your files anytime via the bot or by contacting us</li>
         </ul>
 
+        <div class="key-points">
+            <h3>Key Privacy Points at a Glance</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Aspect</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Data Collection</td>
+                        <td>Minimal and necessary for service functionality</td>
+                    </tr>
+                    <tr>
+                        <td>Data Sharing</td>
+                        <td>Never shared unless legally required</td>
+                    </tr>
+                    <tr>
+                        <td>Retention Period</td>
+                        <td>Up to 30 days or until deletion</td>
+                    </tr>
+                    <tr>
+                        <td>Your Rights</td>
+                        <td>Access, correct, or delete your data anytime</td>
+                    </tr>
+                    <tr>
+                        <td>Security Measures</td>
+                        <td>Advanced encryption and secure storage</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
         <h2>4. Your Rights</h2>
-        <p>You have full control over your data:</p>
+        <p><i class="fas fa-user-check icon"></i> You have full control over your data:</p>
         <ul style="list-style-type: none; padding-left: 1rem; margin-bottom: 1.5rem;">
-            <li>Right to access your stored data</li>
-            <li>Right to request deletion at any time</li>
+            <li><i class="fas fa-eye" style="color: var(--success-color); margin-right: 10px;"></i> Right to access your stored data</li>
+            <li><i class="fas fa-edit" style="color: var(--success-color); margin-right: 10px;"></i> Right to correct inaccuracies</li>
+            <li><i class="fas fa-trash-alt" style="color: var(--success-color); margin-right: 10px;"></i> Right to request deletion at any time</li>
         </ul>
         <p>For assistance, contact our admin at <a href="https://t.me/MAXWARORG">@MAXWARORG</a>.</p>
 
         <h2>5. Security Measures</h2>
-        <p>We prioritize your data security with:</p>
+        <p><i class="fas fa-shield-alt icon"></i> We prioritize your data security with:</p>
         <ul style="list-style-type: none; padding-left: 1rem; margin-bottom: 1.5rem;">
-            <li>End-to-end encryption for data transmission</li>
-            <li>Secure server infrastructure</li>
-            <li>Regular security audits and updates</li>
+            <li><i class="fas fa-lock" style="color: var(--success-color); margin-right: 10px;"></i> End-to-end encryption for data transmission</li>
+            <li><i class="fas fa-server" style="color: var(--success-color); margin-right: 10px;"></i> Secure server infrastructure</li>
+            <li><i class="fas fa-user-secret" style="color: var(--success-color); margin-right: 10px;"></i> Regular security audits and updates</li>
+        </ul>
+        <p>While we strive for maximum security, no system is entirely immune to all risks.</p>
+
+        <h2>6. Third-Party Services</h2>
+        <p><i class="fas fa-handshake icon"></i> Our services rely on Telegram’s API and infrastructure. Their <a href="https://telegram.org/privacy" target="_blank">Privacy Policy</a> also applies to data processed through their platform. We ensure compliance with their standards and ours.</p>
+
+        <h2>7. Policy Updates</h2>
+        <p><i class="fas fa-refresh icon"></i> We may update this policy to reflect changes in our practices or legal requirements. Any updates will be posted here, and we recommend reviewing this page periodically. You’ll be notified of significant changes via the bot or website.</p>
+
+        <h2>8. Contact Us</h2>
+        <p><i class="fas fa-envelope icon"></i> If you have questions, concerns, or need assistance regarding your privacy, please reach out:</p>
+        <ul style="list-style-type: none; padding-left: 1rem; margin-bottom: 1.5rem;">
+            <li><i class="fas fa-telegram" style="color: var(--highlight-color); margin-right: 10px;"></i> Telegram: <a href="https://t.me/MAXWARORG">@MAXWARORG</a></li>
+            <li><i class="fas fa-globe" style="color: var(--highlight-color); margin-right: 10px;"></i> Website: <a href="/">Telegram File Uploader Bot</a></li>
+            <li><i class="fas fa-phone-alt" style="color: var(--highlight-color); margin-right: 10px;"></i> Email: hojievmakhmud@gmail.com</li>
         </ul>
 
         <a href="/" class="back-btn">Return to Home</a>
     </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const headers = document.querySelectorAll('h2');
+            headers.forEach(header => {
+                header.addEventListener('mouseover', () => {
+                    header.style.color = var(--accent-color);
+                });
+                header.addEventListener('mouseout', () => {
+                    header.style.color = var(--primary-color);
+                });
+            });
+        });
+    </script>
+</body>
+</html>
+"""
+
+ADMIN_HTML = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); font-family: 'Poppins', sans-serif; padding: 2rem; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
+        h1 { color: #4361ee; margin-bottom: 1rem; }
+        .file-list { margin-top: 2rem; }
+        .file-item { border-bottom: 1px solid #eee; padding: 1rem 0; }
+        .btn { display: inline-block; padding: 0.8rem 1.5rem; background: #4361ee; color: white; border-radius: 50px; text-decoration: none; margin: 0.5rem; }
+        .btn:hover { background: #3f37c9; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Admin Panel</h1>
+        <p>Manage uploaded files, users, and bot settings.</p>
+
+        <div class="file-list">
+            <h2>Uploaded Files</h2>
+            {% for msg_id, file_data in uploaded_files.items() %}
+                <div class="file-item">
+                    <p><strong>File Type:</strong> {{ file_data.file_type|capitalize }}</p>
+                    <p><strong>Uploaded By:</strong> User ID {{ file_data.user_id }}</p>
+                    <p><strong>Size:</strong> {{ file_data.file_size }} MB</p>
+                    <p><strong>Uploaded At:</strong> {{ datetime.fromtimestamp(file_data.timestamp).strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                    <a href="https://t.me/{{ CHANNEL_USERNAME[1:] }}/{{ msg_id }}" class="btn">View File</a>
+                    <a href="#" class="btn" onclick="deleteFile({{ msg_id }})">Delete</a>
+                </div>
+            {% endfor %}
+        </div>
+
+        <a href="/" class="btn">Back to Home</a>
+    </div>
+
+    <script>
+        function deleteFile(msg_id) {
+            if (confirm("Are you sure you want to delete this file?")) {
+                fetch('/delete_file/' + msg_id, { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            alert('File deleted successfully!');
+                            location.reload();
+                        } else {
+                            alert('Failed to delete file.');
+                        }
+                    });
+            }
+        }
+    </script>
 </body>
 </html>
 """
