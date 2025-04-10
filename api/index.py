@@ -416,7 +416,7 @@ We are committed to protecting your privacy. Here's how we handle your data:
 
 4. <b>Your Rights:</b> You can request deletion of your data or files at any time by contacting us or using the delete button.
 
-5. <b>Contact Us:</b> For privacy concerns, contact our admin at @AdminUsername.
+5. <b>Contact Us:</b> For privacy concerns, contact our admin at @MAXWARORG.
 
 By using this bot, you agree to this privacy policy.
 """
@@ -1083,7 +1083,7 @@ PRIVACY_HTML = """
             <li><i class="fas fa-edit" style="color: var(--success-color); margin-right: 10px;"></i> Right to correct inaccuracies</li>
             <li><i class="fas fa-trash-alt" style="color: var(--success-color); margin-right: 10px;"></i> Right to request deletion at any time</li>
         </ul>
-        <p>For assistance, contact our admin at <a href="https://t.me/AdminUsername">@AdminUsername</a>.</p>
+        <p>For assistance, contact our admin at <a href="https://t.me/MAXWARORG">@MAXWARORG</a>.</p>
 
         <h2>5. Security Measures</h2>
         <p><i class="fas fa-shield-alt icon"></i> We prioritize your data security with:</p>
@@ -1103,7 +1103,7 @@ PRIVACY_HTML = """
         <h2>8. Contact Us</h2>
         <p><i class="fas fa-envelope icon"></i> If you have questions, concerns, or need assistance regarding your privacy, please reach out:</p>
         <ul style="list-style-type: none; padding-left: 1rem; margin-bottom: 1.5rem;">
-            <li><i class="fas fa-telegram" style="color: var(--highlight-color); margin-right: 10px;"></i> Telegram: <a href="https://t.me/AdminUsername">@AdminUsername</a></li>
+            <li><i class="fas fa-telegram" style="color: var(--highlight-color); margin-right: 10px;"></i> Telegram: <a href="https://t.me/MAXWARORG">@MAXWARORG</a></li>
             <li><i class="fas fa-globe" style="color: var(--highlight-color); margin-right: 10px;"></i> Website: <a href="/">Telegram File Uploader Bot</a></li>
             <li><i class="fas fa-phone-alt" style="color: var(--highlight-color); margin-right: 10px;"></i> Email: support@fileuploaderbot.com (coming soon)</li>
         </ul>
