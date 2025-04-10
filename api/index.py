@@ -1,13 +1,10 @@
 import os
 import requests
-import hmac
-import hashlib
 from flask import Flask, Response, request, jsonify, render_template_string
 from datetime import datetime, timedelta
 import time
 import threading
 import logging
-from functools import wraps
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -15,7 +12,6 @@ logger = logging.getLogger(__name__)
 
 # Flask application
 app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY', 'your-secret-key-here')  # For sessions (can be removed if no longer needed)
 
 # Bot configuration
 TOKEN = os.getenv('TOKEN')
@@ -28,12 +24,11 @@ MAX_FILE_SIZE_MB = 50  # Maximum file size in MB
 RATE_LIMIT = 3  # Files per minute per user
 BOT_USERNAME = "IP_AdressBot"  # Your bot's username
 
-# User data and file storage (in memory for simplicity; use a database in production)
+# User data and file storage
 uploaded_files = {}
 user_activity = {}
-users = {}
 
-# Helper functions (keep only relevant ones)
+# Helper functions (same as before, only including necessary ones for brevity)
 def create_inline_keyboard(buttons, columns=2):
     keyboard = []
     row = []
@@ -45,19 +40,6 @@ def create_inline_keyboard(buttons, columns=2):
     if row:
         keyboard.append(row)
     return {"inline_keyboard": keyboard}
-
-def create_reply_keyboard(buttons, resize=True, one_time=False):
-    keyboard = []
-    row = []
-    for button in buttons:
-        row.append({"text": button})
-    keyboard.append(row)
-    return {
-        "keyboard": keyboard,
-        "resize_keyboard": resize,
-        "one_time_keyboard": one_time,
-        "selective": True
-    }
 
 def send_message(chat_id, text, reply_markup=None, disable_web_page_preview=True):
     try:
@@ -96,17 +78,9 @@ def edit_message_text(chat_id, message_id, text, reply_markup=None):
         return None
 
 def send_file_to_channel(file_id, file_type, caption=None, chat_id=CHANNEL_USERNAME):
-    methods = {
-        "document": ("sendDocument", "document"),
-        "photo": ("sendPhoto", "photo"),
-        "video": ("sendVideo", "video"),
-        "audio": ("sendAudio", "audio"),
-        "voice": ("sendVoice", "voice")
-    }
-    
+    methods = {"document": ("sendDocument", "document"), "photo": ("sendPhoto", "photo"), "video": ("sendVideo", "video"), "audio": ("sendAudio", "audio"), "voice": ("sendVoice", "voice")}
     if file_type not in methods:
         return None
-
     method, payload_key = methods[file_type]
     url = f"{BASE_API_URL}/{method}"
     payload = {"chat_id": chat_id, payload_key: file_id}
@@ -137,20 +111,11 @@ def send_typing_action(chat_id):
     requests.post(url, json=payload, timeout=30)
 
 def create_file_info_message(file_data, channel_url):
-    file_type_emoji = {
-        "document": "📄",
-        "photo": "🖼️",
-        "video": "🎬",
-        "audio": "🎵",
-        "voice": "🎤"
-    }.get(file_data["file_type"], "📁")
-    
+    file_type_emoji = {"document": "📄", "photo": "🖼️", "video": "🎬", "audio": "🎵", "voice": "🎤"}.get(file_data["file_type"], "📁")
     user_info = get_user_info(file_data["user_id"])
     username = user_info.get("username", "Unknown")
     first_name = user_info.get("first_name", "User")
-    
     upload_time = datetime.fromtimestamp(file_data["timestamp"]).strftime('%Y-%m-%d %H:%M:%S')
-    
     return f"""
 {file_type_emoji} <b>File Successfully Uploaded!</b>
 
@@ -167,12 +132,9 @@ def check_rate_limit(user_id):
     now = time.time()
     if user_id not in user_activity:
         user_activity[user_id] = []
-    
     user_activity[user_id] = [t for t in user_activity[user_id] if now - t < 60]
-    
     if len(user_activity[user_id]) >= RATE_LIMIT:
         return False
-    
     user_activity[user_id].append(now)
     return True
 
@@ -524,7 +486,6 @@ def handle_menu_action(chat_id, message_id, user_id, action):
     elif action == "admin_list" and user_id in ADMIN_IDS:
         list_files(chat_id, user_id)
 
-# Background task
 def clean_activity_data():
     while True:
         now = time.time()
@@ -537,12 +498,15 @@ def clean_activity_data():
 cleaner_thread = threading.Thread(target=clean_activity_data, daemon=True)
 cleaner_thread.start()
 
-# Web Routes (Simplified)
+# Web Routes
 @app.route('/', methods=['GET'])
 def home():
     return render_template_string(HOME_HTML, bot_username=BOT_USERNAME)
 
-# Updated HTML Template
+@app.route('/privacy', methods=['GET'])
+def privacy_policy():
+    return render_template_string(PRIVACY_HTML)
+
 HOME_HTML = """
 <!DOCTYPE html>
 <html lang="en">
@@ -611,18 +575,160 @@ HOME_HTML = """
         <div class="btn-group">
             <a href="https://t.me/{{ bot_username }}" class="btn">Start the Bot</a>
             <a href="/setwebhook" class="btn btn-outline">Set Webhook</a>
+            <a href="/privacy" class="btn btn-outline">Privacy Policy</a>
         </div>
         
         <footer>
-            <p>© 2025 Telegram File Uploader Bot. All rights reserved.</p>
+            <p>© 2025 Telegram File Uploader Bot. All rights reserved. <a href="/privacy">Privacy Policy</a></p>
         </footer>
     </div>
 </body>
 </html>
 """
 
-# Remove ADMIN_HTML and related routes since admin functionality is handled via Telegram bot
-# Keep only the core bot functionality
+PRIVACY_HTML = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - Telegram File Uploader Bot</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #1a73e8;
+            --secondary-color: #f8faf9;
+            --text-color: #202124;
+            --accent-color: #34a853;
+            --error-color: #ea4335;
+            --success-color: #34a853;
+            --border-color: #e0e0e0;
+            --shadow-color: rgba(0, 0, 0, 0.1);
+            --highlight-color: #fbbc05;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background: linear-gradient(135deg, #e3f2fd 0%, #f5f7fa 100%);
+            padding: 2rem 0;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 4rem 5rem;
+            border-radius: 25px;
+            box-shadow: 0 15px 40px var(--shadow-color);
+            border: 2px solid var(--border-color);
+            animation: fadeIn 1s ease-in;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        header { text-align: center; margin-bottom: 3rem; }
+
+        header::after {
+            content: '';
+            position: absolute;
+            bottom: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50px;
+            height: 3px;
+            background: var(--primary-color);
+            border-radius: 2px;
+        }
+
+        h1 { color: var(--primary-color); font-size: 3rem; font-weight: 700; margin-bottom: 1.5rem; letter-spacing: -0.5px; text-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); }
+
+        h2 { color: var(--primary-color); font-size: 1.8rem; font-weight: 600; margin: 2.5rem 0 1.5rem; border-bottom: 3px solid var(--border-color); padding-bottom: 0.7rem; transition: transform 0.3s ease; }
+
+        h2:hover { transform: translateX(10px); }
+
+        p { margin-bottom: 1.5rem; color: #333; font-size: 1.1rem; line-height: 1.8; opacity: 0.95; transition: opacity 0.3s ease; }
+
+        p:hover { opacity: 1; }
+
+        a { color: var(--primary-color); text-decoration: none; transition: color 0.3s ease, text-decoration 0.3s ease; position: relative; }
+
+        a::after { content: ''; position: absolute; width: 0; height: 2px; bottom: -4px; left: 0; background: var(--accent-color); transition: width 0.3s ease; }
+
+        a:hover::after { width: 100%; text-decoration: underline; }
+
+        .policy-section { background: var(--secondary-color); padding: 2rem; border-radius: 15px; margin-bottom: 2.5rem; border-left: 5px solid var(--primary-color); box-shadow: 0 5px 15px var(--shadow-color); animation: slideUp 0.8s ease-out; }
+
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        .back-btn { display: inline-block; padding: 1rem 2rem; background: linear-gradient(45deg, var(--primary-color), var(--accent-color)); color: white; border-radius: 50px; text-decoration: none; font-weight: 600; transition: all 0.4s ease; box-shadow: 0 8px 25px var(--shadow-color); margin-top: 2.5rem; }
+
+        .back-btn:hover { transform: translateY(-3px); box-shadow: 0 12px 35px var(--shadow-color); background: linear-gradient(45deg, var(--accent-color), var(--primary-color)); }
+
+        @media (max-width: 768px) { .container { padding: 2.5rem 2rem; margin: 0 1rem; } h1 { font-size: 2.2rem; } h2 { font-size: 1.4rem; } p { font-size: 1rem; } .policy-section { padding: 1.5rem; } .back-btn { padding: 0.8rem 1.5rem; font-size: 0.9rem; } }
+
+        @media (max-width: 480px) { .container { padding: 2rem 1.5rem; } h1 { font-size: 1.8rem; } h2 { font-size: 1.2rem; } .policy-section { padding: 1rem; } .back-btn { padding: 0.7rem 1.2rem; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Privacy Policy</h1>
+            <p>Ensuring your privacy and data security is our top priority. Read on to understand how we protect your information.</p>
+        </header>
+
+        <div class="policy-section">
+            <p>At Telegram File Uploader Bot, we are dedicated to safeguarding your privacy. This comprehensive Privacy Policy outlines how we collect, use, store, and protect your personal data when you interact with our bot and website, ensuring transparency and trust.</p>
+        </div>
+
+        <h2>1. Data We Collect</h2>
+        <p>We only collect essential information to provide our services effectively:</p>
+        <ul style="list-style-type: none; padding-left: 1rem; margin-bottom: 1.5rem;">
+            <li>Telegram ID and Username</li>
+            <li>File Metadata (type, size, upload time)</li>
+        </ul>
+
+        <h2>2. How We Use Your Data</h2>
+        <p>Your data is used solely for the following purposes:</p>
+        <ul style="list-style-type: none; padding-left: 1rem; margin-bottom: 1.5rem;">
+            <li>Facilitating file uploads to our Telegram channel</li>
+            <li>Generating and sharing direct links to your files</li>
+            <li>Managing your interactions and ensuring service functionality</li>
+        </ul>
+        <p>We never share your data with third parties except as required by law or with your explicit consent.</p>
+
+        <h2>3. Data Storage and Retention</h2>
+        <p>Your data is stored securely and temporarily:</p>
+        <ul style="list-style-type: none; padding-left: 1rem; margin-bottom: 1.5rem;">
+            <li>Files and metadata are retained for up to 30 days or until you request deletion</li>
+            <li>You can delete your files anytime via the bot or by contacting us</li>
+        </ul>
+
+        <h2>4. Your Rights</h2>
+        <p>You have full control over your data:</p>
+        <ul style="list-style-type: none; padding-left: 1rem; margin-bottom: 1.5rem;">
+            <li>Right to access your stored data</li>
+            <li>Right to request deletion at any time</li>
+        </ul>
+        <p>For assistance, contact our admin at <a href="https://t.me/MAXWARORG">@MAXWARORG</a>.</p>
+
+        <h2>5. Security Measures</h2>
+        <p>We prioritize your data security with:</p>
+        <ul style="list-style-type: none; padding-left: 1rem; margin-bottom: 1.5rem;">
+            <li>End-to-end encryption for data transmission</li>
+            <li>Secure server infrastructure</li>
+            <li>Regular security audits and updates</li>
+        </ul>
+
+        <a href="/" class="back-btn">Return to Home</a>
+    </div>
+</body>
+</html>
+"""
 
 if __name__ == '__main__':
     port = int(os.getenv("PORT", 5000))
