@@ -6,7 +6,12 @@ from flask import Flask, Response, request, jsonify, render_template_string, ses
 from datetime import datetime, timedelta
 import time
 import threading
+import logging
 from functools import wraps
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Flask application
 app = Flask(__name__)
@@ -81,7 +86,7 @@ def send_message(chat_id, text, reply_markup=None, disable_web_page_preview=True
         response.raise_for_status()
         return response.json()
     except Exception as e:
-        print(f"Error sending message: {e}")
+        logger.error(f"Error sending message: {e}")
         return None
 
 def edit_message_text(chat_id, message_id, text, reply_markup=None):
@@ -99,7 +104,7 @@ def edit_message_text(chat_id, message_id, text, reply_markup=None):
         response.raise_for_status()
         return response.json()
     except Exception as e:
-        print(f"Error editing message: {e}")
+        logger.error(f"Error editing message: {e}")
         return None
 
 def send_file_to_channel(file_id, file_type, caption=None, chat_id=CHANNEL_USERNAME):
@@ -119,7 +124,7 @@ def send_file_to_channel(file_id, file_type, caption=None, chat_id=CHANNEL_USERN
     payload = {"chat_id": chat_id, payload_key: file_id}
     if caption:
         payload["caption"] = caption
-        payload["parse_mode": "HTML"
+        payload["parse_mode"] = "HTML"
     response = requests.post(url, json=payload, timeout=30)
     response.raise_for_status()
     return response.json()
@@ -556,7 +561,7 @@ def home():
 def login():
     return render_template_string(LOGIN_HTML, bot_username=TELEGRAM_BOT_USERNAME)
 
-@app.route('/', methods=['POST'])  # This matches your data-auth-url
+@app.route('/auth', methods=['POST'])  # Separate auth route to handle Telegram Login Widget callback
 def auth():
     data = request.form
     if 'id' in data and 'first_name' in data and 'auth_date' in data:
@@ -572,9 +577,12 @@ def auth():
         if calculated_hash == hash_:
             session['user_id'] = user_id
             session['first_name'] = first_name
+            logger.info(f"User {user_id} logged in successfully")
             return redirect(url_for('home'))
         else:
+            logger.error("Authentication failed due to invalid hash")
             return jsonify({"error": "Authentication failed"}), 401
+    logger.error("Invalid data received for authentication")
     return jsonify({"error": "Invalid data"}), 400
 
 @app.route('/logout', methods=['GET'])
@@ -709,7 +717,7 @@ LOGIN_HTML = """
     <div class="login-container">
         <h1>Login with Telegram</h1>
         <p>Click the button below to log in using your Telegram account for additional features.</p>
-        <script async src="https://telegram.org/js/telegram-widget.js?22" data-telegram-login="{{ bot_username }}" data-size="large" data-auth-url="https://uploadfiletgbot.vercel.app/" data-request-access="write"></script>
+        <script async src="https://telegram.org/js/telegram-widget.js?22" data-telegram-login="{{ bot_username }}" data-size="large" data-auth-url="https://uploadfiletgbot.vercel.app/auth" data-request-access="write"></script>
         <p>By logging in, you agree to our <a href="/privacy">Privacy Policy</a>.</p>
         <a href="/" class="back-btn">Back to Home</a>
     </div>
@@ -830,6 +838,17 @@ ADMIN_HTML = """
 </body>
 </html>
 """
+
+@app.route('/delete_file/<int:msg_id>', methods=['POST'])
+@login_required
+def delete_file(msg_id):
+    user_id = session.get('user_id')
+    if user_id not in ADMIN_IDS:
+        return jsonify({"status": "error", "message": "Access denied"}), 403
+    if msg_id in uploaded_files and delete_message(CHANNEL_USERNAME, msg_id):
+        del uploaded_files[msg_id]
+        return jsonify({"status": "success", "message": "File deleted"}), 200
+    return jsonify({"status": "error", "message": "File not found or deletion failed"}), 404
 
 if __name__ == '__main__':
     port = int(os.getenv("PORT", 5000))
