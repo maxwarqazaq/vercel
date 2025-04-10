@@ -21,7 +21,7 @@ BASE_API_URL = f"https://api.telegram.org/bot{TOKEN}"
 ADMIN_IDS = [6099917788]  # Replace with your admin user IDs
 MAX_FILE_SIZE_MB = 50  # Maximum file size in MB
 RATE_LIMIT = 3  # Files per minute per user
-BOT_USERNAME = "@IP_AdressBot"  # Replace with your bot's username
+BOT_USERNAME = "IP_AdressBot"  # Replace with your bot's username
 
 # User data and file storage (in memory for simplicity; use a database in production)
 uploaded_files = {}
