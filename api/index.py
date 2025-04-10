@@ -787,7 +787,7 @@ def index():
             </div>
             
             <footer>
-                <p>© 2023 Telegram File Uploader Bot. All rights reserved.</p>
+                <p>© 2025 Telegram File Uploader Bot. All rights reserved.</p>
             </footer>
         </div>
     </body>
