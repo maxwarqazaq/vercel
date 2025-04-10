@@ -21,7 +21,7 @@ BASE_API_URL = f"https://api.telegram.org/bot{TOKEN}"
 ADMIN_IDS = [6099917788]  # Replace with your admin user IDs
 MAX_FILE_SIZE_MB = 50  # Maximum file size in MB
 RATE_LIMIT = 3  # Files per minute per user
-BOT_USERNAME = "IP_AdressBot"  # Replace with your bot's username
+BOT_USERNAME = "IP_AdressBot"  # Your bot's username
 
 # User data and file storage (in memory for simplicity; use a database in production)
 uploaded_files = {}
@@ -119,7 +119,7 @@ def send_file_to_channel(file_id, file_type, caption=None, chat_id=CHANNEL_USERN
     payload = {"chat_id": chat_id, payload_key: file_id}
     if caption:
         payload["caption"] = caption
-        payload["parse_mode"] = "HTML"
+        payload["parse_mode": "HTML"
     response = requests.post(url, json=payload, timeout=30)
     response.raise_for_status()
     return response.json()
@@ -186,7 +186,7 @@ def check_rate_limit(user_id):
 # Webhook and routes
 @app.route('/setwebhook', methods=['GET', 'POST'])
 def set_webhook():
-    vercel_url = os.getenv('VERCEL_URL', 'https://your-project.vercel.app')
+    vercel_url = os.getenv('VERCEL_URL', 'https://uploadfiletgbot.vercel.app')
     webhook_url = f"{BASE_API_URL}/setWebhook?url={vercel_url}/webhook&allowed_updates=%5B%22message%22,%22callback_query%22%5D"
     response = requests.get(webhook_url, timeout=30)
     if response.status_code == 200:
@@ -547,13 +547,16 @@ cleaner_thread.start()
 # Web Routes with Optional Telegram Login
 @app.route('/', methods=['GET'])
 def home():
-    return render_template_string(HOME_HTML, bot_username=TELEGRAM_BOT_USERNAME, privacy_policy_url='/privacy')
+    user_id = session.get('user_id', None)
+    is_logged_in = user_id is not None
+    is_admin = user_id in ADMIN_IDS if is_logged_in else False
+    return render_template_string(HOME_HTML, bot_username=TELEGRAM_BOT_USERNAME, privacy_policy_url='/privacy', is_logged_in=is_logged_in, is_admin=is_admin)
 
 @app.route('/login', methods=['GET'])
 def login():
     return render_template_string(LOGIN_HTML, bot_username=TELEGRAM_BOT_USERNAME)
 
-@app.route('/auth', methods=['POST'])
+@app.route('/', methods=['POST'])  # This matches your data-auth-url
 def auth():
     data = request.form
     if 'id' in data and 'first_name' in data and 'auth_date' in data:
@@ -662,10 +665,20 @@ HOME_HTML = """
         <div class="btn-group">
             <a href="https://t.me/{{ bot_username }}" class="btn">Start the Bot</a>
             <a href="/setwebhook" class="btn btn-outline">Set Webhook</a>
+            {% if is_logged_in and is_admin %}
+                <a href="/admin" class="btn">Admin Panel</a>
+            {% endif %}
+            {% if is_logged_in %}
+                <a href="/logout" class="btn btn-outline">Logout</a>
+            {% endif %}
         </div>
         
         <div class="login-section">
-            <p>Want to access additional features? <a href="/login" class="btn-outline">Login with Telegram</a></p>
+            {% if not is_logged_in %}
+                <p>Want to access additional features? <a href="/login" class="btn-outline">Login with Telegram</a></p>
+            {% else %}
+                <p>Welcome! You are logged in.</p>
+            {% endif %}
         </div>
         
         <footer>
@@ -696,7 +709,7 @@ LOGIN_HTML = """
     <div class="login-container">
         <h1>Login with Telegram</h1>
         <p>Click the button below to log in using your Telegram account for additional features.</p>
-        <script async src="https://telegram.org/js/telegram-widget.js?21" data-telegram-login="{{ bot_username }}" data-size="large" data-auth-url="/auth" data-request-access="write"></script>
+        <script async src="https://telegram.org/js/telegram-widget.js?22" data-telegram-login="{{ bot_username }}" data-size="large" data-auth-url="https://uploadfiletgbot.vercel.app/" data-request-access="write"></script>
         <p>By logging in, you agree to our <a href="/privacy">Privacy Policy</a>.</p>
         <a href="/" class="back-btn">Back to Home</a>
     </div>
