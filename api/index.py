@@ -2,7 +2,7 @@ import os
 import requests
 import hmac
 import hashlib
-from flask import Flask, Response, request, jsonify, render_template_string, session
+from flask import Flask, Response, request, jsonify, render_template_string, session, redirect, url_for
 from datetime import datetime, timedelta
 import time
 import threading
@@ -21,7 +21,7 @@ BASE_API_URL = f"https://api.telegram.org/bot{TOKEN}"
 ADMIN_IDS = [6099917788]  # Replace with your admin user IDs
 MAX_FILE_SIZE_MB = 50  # Maximum file size in MB
 RATE_LIMIT = 3  # Files per minute per user
-BOT_USERNAME = "IP_AdressBot"  # Replace with your bot's username
+BOT_USERNAME = "YourBotUsername"  # Replace with your bot's username
 
 # User data and file storage (in memory for simplicity; use a database in production)
 uploaded_files = {}
@@ -37,7 +37,7 @@ def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
-            return jsonify({"error": "Please log in via Telegram"}), 401
+            return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -215,7 +215,7 @@ def handle_callback_query(callback):
     if callback_data.startswith("delete_"):
         channel_message_id = int(callback_data.split("_")[1])
         handle_delete(chat_id, message_id, user_id, channel_message_id)
-    elif callback_data in ["help", "upload_instructions", "main_menu", "admin_panel", "admin_stats", "admin_list", "admin_users", "admin_restart"]:
+    elif callback_data in ["help", "upload_instructions", "main_menu", "admin_panel", "admin_stats", "admin_list", "admin_users", "admin_restart", "privacy"]:
         handle_menu_action(chat_id, message_id, user_id, callback_data)
 
 def handle_message(message):
@@ -411,7 +411,7 @@ We are committed to protecting your privacy. Here's how we handle your data:
 
 4. <b>Your Rights:</b> You can request deletion of your data or files at any time by contacting us or using the delete button.
 
-5. <b>Contact Us:</b> For privacy concerns, contact our admin at @MAXWARORH.
+5. <b>Contact Us:</b> For privacy concerns, contact our admin at @AdminUsername.
 
 By using this bot, you agree to this privacy policy.
 """
@@ -544,36 +544,41 @@ def clean_activity_data():
 cleaner_thread = threading.Thread(target=clean_activity_data, daemon=True)
 cleaner_thread.start()
 
-# Telegram Login and Web Routes
-@app.route('/auth', methods=['GET', 'POST'])
-def auth():
-    if request.method == 'POST':
-        data = request.form
-        if 'id' in data and 'first_name' in data and 'auth_date' in data:
-            user_id = data['id']
-            first_name = data['first_name']
-            auth_date = int(data['auth_date'])
-            hash_ = data['hash']
+# Web Routes with Optional Telegram Login
+@app.route('/', methods=['GET'])
+def home():
+    return render_template_string(HOME_HTML, bot_username=TELEGRAM_BOT_USERNAME, privacy_policy_url='/privacy')
 
-            check_string = '\n'.join([f"{key}={value}" for key, value in sorted(data.items()) if key != 'hash'])
-            secret_key = hmac.new(b'WebAppData', TELEGRAM_BOT_API_KEY.encode(), hashlib.sha256).digest()
-            calculated_hash = hmac.new(secret_key, check_string.encode(), hashlib.sha256).hexdigest()
-
-            if calculated_hash == hash_:
-                session['user_id'] = user_id
-                session['first_name'] = first_name
-                return jsonify({"status": "success", "message": "Logged in successfully"}), 200
-            else:
-                return jsonify({"error": "Authentication failed"}), 401
-        return jsonify({"error": "Invalid data"}), 400
+@app.route('/login', methods=['GET'])
+def login():
     return render_template_string(LOGIN_HTML, bot_username=TELEGRAM_BOT_USERNAME)
 
-@app.route('/', methods=['GET'])
-@login_required
-def index():
-    user_id = session.get('user_id')
-    is_admin = user_id in ADMIN_IDS
-    return render_template_string(INDEX_HTML, is_admin=is_admin, bot_username=TELEGRAM_BOT_USERNAME, privacy_policy_url='/privacy')
+@app.route('/auth', methods=['POST'])
+def auth():
+    data = request.form
+    if 'id' in data and 'first_name' in data and 'auth_date' in data:
+        user_id = data['id']
+        first_name = data['first_name']
+        auth_date = int(data['auth_date'])
+        hash_ = data['hash']
+
+        check_string = '\n'.join([f"{key}={value}" for key, value in sorted(data.items()) if key != 'hash'])
+        secret_key = hmac.new(b'WebAppData', TELEGRAM_BOT_API_KEY.encode(), hashlib.sha256).digest()
+        calculated_hash = hmac.new(secret_key, check_string.encode(), hashlib.sha256).hexdigest()
+
+        if calculated_hash == hash_:
+            session['user_id'] = user_id
+            session['first_name'] = first_name
+            return redirect(url_for('home'))
+        else:
+            return jsonify({"error": "Authentication failed"}), 401
+    return jsonify({"error": "Invalid data"}), 400
+
+@app.route('/logout', methods=['GET'])
+def logout():
+    session.pop('user_id', None)
+    session.pop('first_name', None)
+    return redirect(url_for('home'))
 
 @app.route('/privacy', methods=['GET'])
 def privacy_policy():
@@ -588,33 +593,7 @@ def admin_panel():
     return render_template_string(ADMIN_HTML, uploaded_files=uploaded_files, CHANNEL_USERNAME=CHANNEL_USERNAME)
 
 # HTML Templates as Strings
-LOGIN_HTML = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login with Telegram</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body { background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); font-family: 'Poppins', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .login-container { background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); text-align: center; }
-        h1 { color: #4361ee; margin-bottom: 1rem; }
-        .telegram-login { margin-top: 1rem; }
-    </style>
-</head>
-<body>
-    <div class="login-container">
-        <h1>Login with Telegram</h1>
-        <p>Click the button below to log in using your Telegram account.</p>
-        <script async src="https://telegram.org/js/telegram-widget.js?21" data-telegram-login="{{ bot_username }}" data-size="large" data-auth-url="/auth" data-request-access="write"></script>
-        <p>By logging in, you agree to our <a href="/privacy">Privacy Policy</a>.</p>
-    </div>
-</body>
-</html>
-"""
-
-INDEX_HTML = """
+HOME_HTML = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -644,7 +623,7 @@ INDEX_HTML = """
         .btn-outline:hover { background: linear-gradient(135deg, var(--primary-color), var(--secondary-color)); color: white; }
         .btn-group { display: flex; flex-wrap: wrap; justify-content: center; margin-top: 2rem; }
         footer { text-align: center; margin-top: 3rem; color: var(--dark-color); opacity: 0.7; font-size: 0.9rem; }
-        .admin-section { display: {{ is_admin ? 'block' : 'none' }}; margin-top: 2rem; }
+        .login-section { text-align: center; margin-top: 2rem; }
         @media (max-width: 768px) { .container { padding: 1.5rem; } h1 { font-size: 2rem; } .features { grid-template-columns: 1fr; } }
     </style>
 </head>
@@ -683,19 +662,43 @@ INDEX_HTML = """
         <div class="btn-group">
             <a href="https://t.me/{{ bot_username }}" class="btn">Start the Bot</a>
             <a href="/setwebhook" class="btn btn-outline">Set Webhook</a>
-            {% if is_admin %}
-                <a href="/admin" class="btn">Admin Panel</a>
-            {% endif %}
         </div>
         
-        <div class="admin-section" style="display: {{ is_admin ? 'block' : 'none' }}">
-            <h2>Admin Actions</h2>
-            <p>Manage users, files, and bot settings from here.</p>
+        <div class="login-section">
+            <p>Want to access additional features? <a href="/login" class="btn-outline">Login with Telegram</a></p>
         </div>
         
         <footer>
             <p>© 2025 Telegram File Uploader Bot. All rights reserved. <a href="{{ privacy_policy_url }}">Privacy Policy</a></p>
         </footer>
+    </div>
+</body>
+</html>
+"""
+
+LOGIN_HTML = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login with Telegram</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); font-family: 'Poppins', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .login-container { background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); text-align: center; }
+        h1 { color: #4361ee; margin-bottom: 1rem; }
+        .telegram-login { margin-top: 1rem; }
+        .back-btn { display: inline-block; padding: 0.8rem 1.5rem; background: #4361ee; color: white; border-radius: 50px; text-decoration: none; margin-top: 1rem; }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h1>Login with Telegram</h1>
+        <p>Click the button below to log in using your Telegram account for additional features.</p>
+        <script async src="https://telegram.org/js/telegram-widget.js?21" data-telegram-login="{{ bot_username }}" data-size="large" data-auth-url="/auth" data-request-access="write"></script>
+        <p>By logging in, you agree to our <a href="/privacy">Privacy Policy</a>.</p>
+        <a href="/" class="back-btn">Back to Home</a>
     </div>
 </body>
 </html>
@@ -725,13 +728,13 @@ PRIVACY_HTML = """
         <p>We are committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your information when you use our Telegram File Uploader Bot and website.</p>
 
         <h2>1. Data Collection</h2>
-        <p>We collect only the data necessary for providing our services, including your Telegram ID, username, and file metadata (e.g., file type, size, and upload time).</p>
+        <p>We collect only the data necessary for providing our services, including your Telegram ID, username, and file metadata (e.g., file type, size, and upload time) when you interact with the bot. If you choose to log in via Telegram on our website, we may also store your user ID and name for authentication purposes.</p>
 
         <h2>2. Data Usage</h2>
-        <p>Your data is used exclusively to facilitate file uploads, provide shareable links, and manage your interactions with the bot. We do not share your data with third parties unless required by law or with your explicit consent.</p>
+        <p>Your data is used exclusively to facilitate file uploads, provide shareable links, manage your interactions with the bot, and (if logged in) access additional website features. We do not share your data with third parties unless required by law or with your explicit consent.</p>
 
         <h2>3. Data Storage</h2>
-        <p>Files and user data are stored temporarily on our servers and can be deleted at your request or automatically after a set period (e.g., 30 days). You can request deletion at any time by contacting us or using the delete function in the bot.</p>
+        <p>Files and user data are stored temporarily on our servers and can be deleted at your request or automatically after a set period (e.g., 30 days). You can request deletion at any time by contacting us or using the delete function in the bot. Website login data is stored in session cookies and cleared when you log out or the session expires.</p>
 
         <h2>4. Your Rights</h2>
         <p>You have the right to access, correct, or delete your personal data. If you have concerns or questions about your data, please contact our admin at @AdminUsername.</p>
@@ -740,7 +743,7 @@ PRIVACY_HTML = """
         <p>We implement reasonable security measures to protect your data from unauthorized access, alteration, or disclosure. However, no method of transmission over the Internet or electronic storage is 100% secure, and we cannot guarantee absolute security.</p>
 
         <h2>6. Third-Party Services</h2>
-        <p>Our bot uses Telegram's API and infrastructure. Their privacy policies also apply to any data processed through their services.</p>
+        <p>Our bot and website use Telegram's API and infrastructure. Their privacy policies also apply to any data processed through their services.</p>
 
         <h2>7. Changes to This Policy</h2>
         <p>We may update this Privacy Policy from time to time. Any changes will be posted here, and we encourage you to review this policy periodically.</p>
@@ -792,6 +795,7 @@ ADMIN_HTML = """
         </div>
 
         <a href="/" class="btn">Back to Home</a>
+        <a href="/logout" class="btn">Logout</a>
     </div>
 
     <script>
