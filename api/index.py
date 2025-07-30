@@ -14,9 +14,9 @@ import threading
 app = Flask(__name__)
 
 # Configuration
-API_KEY = os.environ.get('ADMIN_API_KEY', '2154841a3ff6edf16371271e42604f4be60e6a45cf3b9391bbf1126d5d9b83e0')
+API_KEY = os.environ.get('ADMIN_API_KEY', '743adc2aeae56f85df1bf3aa2bf49d4554e1c03e04015a14bc10d6594e44a429')
 BOT_TOKEN = os.environ.get('BOT_TOKEN', '7881373466:AAE1rR7Ka119zDC2wOFDF4ArNUVdzSLjs10')
-WEBHOOK_URL = os.environ.get('WEBHOOK_URL', '')  # Set this in Vercel env vars
+WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://vercelmaxwar.vercel.app/webhook')  # Set this in Vercel env vars
 
 # File storage (using temp directory for Vercel)
 UPLOAD_FOLDER = tempfile.gettempdir()
